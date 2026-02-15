@@ -426,32 +426,56 @@ class WaterMarkCam {
                     attempts++;
                     
                     if (attempts > maxAttempts) {
-                        console.error('二維碼生成超時');
+                        console.error('❌ 二維碼生成超時');
+                        // 输出容器内的所有元素，帮助调试
+                        console.log('🔍 qrCanvas 内容:', this.qrCanvas.innerHTML.substring(0, 200));
+                        console.log('🔍 qrCanvas 子元素:', this.qrCanvas.children);
                         this.qrCodeReady = false;
                         reject('生成超時');
                         return;
                     }
                     
+                    // 首先检查是否有 canvas（QRCode.js 可能先生成 canvas）
+                    const canvas = this.qrCanvas.querySelector('canvas');
                     const img = this.qrCanvas.querySelector('img');
+                    
+                    if (attempts === 1) {
+                        console.log('🔍 第一次检测 - canvas:', !!canvas, 'img:', !!img);
+                    }
+                    
                     if (img) {
                         // 检查多个条件确保图片真正加载完成
                         const isComplete = img.complete;
                         const hasNaturalDimensions = img.naturalWidth > 0 && img.naturalHeight > 0;
-                        const hasSrc = img.src && img.src.length > 0;
+                        const srcValue = img.src || '';
+                        const hasSrc = srcValue.length > 0;
                         
-                        console.log('二維碼檢測第', attempts, '次:', {
-                            isComplete,
-                            hasNaturalDimensions,
-                            naturalWidth: img.naturalWidth,
-                            hasSrc
-                        });
+                        if (attempts <= 3 || attempts % 20 === 0) {
+                            console.log('二維碼檢測第', attempts, '次:', {
+                                isComplete,
+                                hasNaturalDimensions,
+                                naturalWidth: img.naturalWidth,
+                                srcLength: srcValue.length,
+                                srcStart: srcValue.substring(0, 30)
+                            });
+                        }
                         
                         if (isComplete && hasNaturalDimensions && hasSrc) {
                             console.log('✅ 二维码生成成功！尺寸:', img.naturalWidth, 'x', img.naturalHeight);
-                            this.qrCodeReady = true;  // 标记二维码就绪
-                            
-                            // 额外等待100ms确保渲染完成（针对慢速设备）
+                            this.qrCodeReady = true;
                             setTimeout(() => resolve(img), 100);
+                            return;
+                        }
+                    } else if (canvas && attempts > 10) {
+                        // 如果只有 canvas 没有 img，尝试直接使用 canvas
+                        console.log('⚠️ 只检测到 canvas，尝试直接使用');
+                        if (canvas.width > 0 && canvas.height > 0) {
+                            console.log('✅ 使用 canvas 代替 img，尺寸:', canvas.width, 'x', canvas.height);
+                            this.qrCodeReady = true;
+                            // 将 canvas 转换为图片供后续使用
+                            const tempImg = new Image();
+                            tempImg.src = canvas.toDataURL();
+                            tempImg.onload = () => resolve(tempImg);
                             return;
                         }
                     }
