@@ -207,7 +207,7 @@ class WaterMarkCam {
         // 更新提示文字
         const scanText = this.scanOverlay.querySelector('.scan-text');
         if (scanText) {
-            scanText.textContent = '對準二維碼，點擊下方按鈕掃描';
+            scanText.textContent = '請將二維碼放在框內';
         }
     }
     
@@ -231,69 +231,24 @@ class WaterMarkCam {
     }
     
     manualCapture() {
-        // 手動捕獲當前畫面嘗試識別二維碼
+        // 點擊按鈕後開始持續掃描視頻流
         if (!this.isScanning) return;
+        
+        // 如果已經在掃描中，不要重複啟動
+        if (this.scanAnimationId) {
+            console.log('已經在掃描中');
+            return;
+        }
         
         // 提示正在掃描
         const scanText = this.scanOverlay.querySelector('.scan-text');
         if (scanText) {
-            scanText.textContent = '正在掃描...';
+            scanText.textContent = '正在掃描中...';
             scanText.style.color = '#007AFF';
         }
         
-        // 使用更高的采样率进行多次尝试
-        let attempts = 0;
-        const maxAttempts = 3;
-        
-        const tryCapture = () => {
-            attempts++;
-            
-            const scanCanvas = document.createElement('canvas');
-            // 兼容性：旧浏览器可能不支持willReadFrequently选项
-            let scanCtx;
-            try {
-                scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
-            } catch (e) {
-                scanCtx = scanCanvas.getContext('2d');
-            }
-            
-            scanCanvas.width = this.video.videoWidth;
-            scanCanvas.height = this.video.videoHeight;
-            
-            if (scanCanvas.width > 0 && scanCanvas.height > 0) {
-                try {
-                    scanCtx.drawImage(this.video, 0, 0, scanCanvas.width, scanCanvas.height);
-                    const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "attemptBoth",
-                    });
-                    
-                    if (code) {
-                        this.onQrCodeDetected(code.data);
-                        return;
-                    }
-                } catch (error) {
-                    console.error('捕獲失敗:', error);
-                }
-            }
-            
-            // 如果没找到且尝试次数未达上限，快速重试
-            if (attempts < maxAttempts) {
-                requestAnimationFrame(tryCapture);
-            } else {
-                // 所有尝试都失败了
-                if (scanText) {
-                    scanText.textContent = '未檢測到二維碼，請重新對準後再試';
-                    scanText.style.color = '#FF3B30';
-                    setTimeout(() => {
-                        scanText.textContent = '對準二維碼，點擊下方按鈕掃描';
-                        scanText.style.color = 'rgba(255, 255, 255, 0.9)';
-                    }, 1500);
-                }
-            }
-        };
-        
-        tryCapture();
+        // 開始持續掃描
+        this.scanQrCode();
     }
     
     refreshVideoStream() {
@@ -312,8 +267,47 @@ class WaterMarkCam {
     }
     
     scanQrCode() {
-        // 此方法已废弃，现在使用手动点击扫描（manualCapture）
-        // 保留此方法以防代码中有其他调用
+        // 持續掃描視頻流
+        if (!this.isScanning) return;
+        
+        // 檢查視頻是否正常播放
+        if (this.video.paused || this.video.ended) {
+            this.video.play().catch(err => console.error('視頻播放錯誤:', err));
+        }
+        
+        // 創建臨時 canvas 用於掃描
+        const scanCanvas = document.createElement('canvas');
+        const scanCtx = scanCanvas.getContext('2d');
+        
+        scanCanvas.width = this.video.videoWidth;
+        scanCanvas.height = this.video.videoHeight;
+        
+        if (scanCanvas.width > 0 && scanCanvas.height > 0) {
+            try {
+                // 繪製當前視頻幀
+                scanCtx.drawImage(this.video, 0, 0, scanCanvas.width, scanCanvas.height);
+                
+                // 獲取圖像數據
+                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                
+                // 使用 jsQR 識別二維碼
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "attemptBoth",
+                });
+                
+                if (code) {
+                    // 識別成功
+                    console.log('✅ 二維碼識別成功:', code.data);
+                    this.onQrCodeDetected(code.data);
+                    return;
+                }
+            } catch (error) {
+                console.error('掃描錯誤:', error);
+            }
+        }
+        
+        // 繼續掃描下一幀
+        this.scanAnimationId = requestAnimationFrame(() => this.scanQrCode());
     }
     
     onQrCodeDetected(qrContent) {
