@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <title>水印相機</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>水印相機</h1>
+                <span class="step-indicator" id="stepIndicator">準備就緒</span>
+            </div>
+        </header>
+
+
+
+        <main>
+            <!-- 相机视图 -->
+            <div class="camera-view" id="cameraView">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <!-- 掃描提示框 -->
+                <div class="scan-overlay" id="scanOverlay" style="display: none;">
+                    <div class="scan-instruction">掃描二維碼</div>
+                    <div class="scan-box">
+                        <div class="scan-corner tl"></div>
+                        <div class="scan-corner tr"></div>
+                        <div class="scan-corner bl"></div>
+                        <div class="scan-corner br"></div>
+                        <div class="scan-line"></div>
+                    </div>
+                    <p class="scan-text">請將二維碼放在框內</p>
+                </div>
+                
+                <!-- 水印预览（隐藏在相机界面） -->
+                <div class="watermark-preview" id="watermarkPreview" style="display: none;">
+                    <canvas id="qrCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- 控制面板 -->
+            <div class="controls">
+                <button id="switchBtn" class="icon-btn" style="display: none;" title="切換鏡頭">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>
+                    </svg>
+                </button>
+                
+                <div class="capture-wrapper">
+                    <button id="captureBtn" class="capture-btn" style="display: none;">
+                        <span class="capture-inner"></span>
+                    </button>
+                    <p class="capture-hint" id="captureHint" style="display: none;">點擊拍照</p>
+                </div>
+                
+                <button id="scanQrBtn" class="icon-btn scan-btn" style="display: none;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <path d="M8 3v4M16 3v4M8 17v4M16 17v4M3 8h4M3 16h4M17 8h4M17 16h4"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- 啟動按鈕區 -->
+            <div class="start-controls" id="startControls">
+                <button id="startBtn" class="start-btn">啟動相機</button>
+                <p class="start-hint">開始使用水印相機</p>
+            </div>
+            
+            <!-- 掃描控制區 -->
+            <div class="scan-controls" id="scanControls" style="display: none;">
+                <div class="scan-button-wrapper">
+                    <button id="captureQrBtn" class="capture-btn-large">
+                        <span class="capture-inner-large"></span>
+                    </button>
+                    <p class="scan-capture-hint">點擊捕捉二維碼</p>
+                </div>
+                <button id="stopScanBtn" class="text-btn">取消</button>
+            </div>
+
+            <!-- 成功提示消息 -->
+            <div class="success-message" id="successMessage" style="display: none;">
+                <span class="success-icon">✓</span>
+                <span class="success-text" id="successText"></span>
+            </div>
+
+            <!-- 水印設置 -->
+            <div class="settings">
+                <h3>二維碼內容</h3>
+                <div class="form-group">
+                    <input type="text" id="qrText" placeholder="請先掃描二維碼⋯" value="" readonly>
+                    <small>點擊掃描按鈕自動識別二維碼</small>
+                </div>
+            </div>
+
+            <!-- 照片预览 -->
+            <div class="photo-preview" id="photoPreview" style="display: none;">
+                <img id="photoPreviewImg" alt="照片預覽">
+                <div class="preview-controls">
+                    <button id="shareBtn" class="preview-btn share-btn" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                            <polyline points="16 6 12 2 8 6"/>
+                            <line x1="12" y1="2" x2="12" y2="15"/>
+                        </svg>
+                        儲存至相簿
+                    </button>
+                    <button id="saveBtn" class="preview-btn save-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        下載照片
+                    </button>
+                    <button id="retakeBtn" class="preview-btn retake-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                            <path d="M3 21v-5h5"/>
+                        </svg>
+                        重拍
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>支援 iOS Safari 11.3+ / Android Chrome 53+</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs2@0.0.2/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

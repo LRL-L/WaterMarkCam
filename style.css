@@ -1,0 +1,645 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang HK", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    background: #000;
+    color: #fff;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 100%;
+    min-height: 100vh;
+    background: #000;
+}
+
+/* 头部 */
+header {
+    text-align: center;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+header h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.step-indicator {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 400;
+}
+
+/* 主内容 */
+main {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* 相机视图 */
+.camera-view {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3/4;
+    background: #000;
+    overflow: hidden;
+    max-height: 60vh;
+}
+
+@media (min-width: 768px) {
+    .camera-view {
+        aspect-ratio: 4/5;
+        max-height: 70vh;
+    }
+}
+
+.camera-view video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 扫描覆盖层 */
+.scan-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.scan-box {
+    width: 260px;
+    height: 260px;
+    border: 2px solid rgba(0, 122, 255, 0.8);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.scan-corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #007AFF;
+}
+
+.scan-corner.tl {
+    top: -2px;
+    left: -2px;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 16px 0 0 0;
+}
+
+.scan-corner.tr {
+    top: -2px;
+    right: -2px;
+    border-left: none;
+    border-bottom: none;
+    border-radius: 0 16px 0 0;
+}
+
+.scan-corner.bl {
+    bottom: -2px;
+    left: -2px;
+    border-right: none;
+    border-top: none;
+    border-radius: 0 0 0 16px;
+}
+
+.scan-corner.br {
+    bottom: -2px;
+    right: -2px;
+    border-left: none;
+    border-top: none;
+    border-radius: 0 0 16px 0;
+}
+
+.scan-line {
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #007AFF, transparent);
+    position: absolute;
+    top: 0;
+    animation: scan 2s ease-in-out infinite;
+    box-shadow: 0 0 8px #007AFF;
+}
+
+.scan-instruction {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+.scan-text {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 1rem;
+    font-weight: 400;
+    margin-top: 24px;
+    text-align: center;
+    padding: 0 20px;
+}
+
+@keyframes scan {
+    0%, 100% {
+        top: 0;
+    }
+    50% {
+        top: calc(100% - 2px);
+    }
+}
+
+/* 成功提示消息 */
+.success-message {
+    background: rgba(52, 199, 89, 0.95);
+    backdrop-filter: blur(20px);
+    color: #fff;
+    padding: 16px 20px;
+    margin: 15px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.success-icon {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.success-text {
+    font-size: 0.95rem;
+    font-weight: 400;
+    flex: 1;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 控制按钮 - iOS 风格 */
+.controls {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 30px 20px 40px;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+}
+
+.capture-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.capture-hint {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* iOS 拍照按钮 */
+.capture-btn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.9);
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.capture-btn:active {
+    transform: scale(0.92);
+    border-color: rgba(255, 255, 255, 0.7);
+}
+
+.capture-inner {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+/* 图标按钮 */
+.icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.icon-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.scan-btn {
+    background: rgba(0, 122, 255, 0.25);
+}
+
+.scan-btn:active {
+    background: rgba(0, 122, 255, 0.4);
+}
+
+/* 启动按钮 */
+.start-controls {
+    padding: 40px 20px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.start-btn {
+    padding: 16px 40px;
+    border: none;
+    border-radius: 14px;
+    background: #007AFF;
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
+
+.start-btn:active {
+    transform: scale(0.96);
+    opacity: 0.85;
+}
+
+.start-hint {
+    margin-top: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+}
+
+/* 扫描控制区 */
+.scan-controls {
+    padding: 30px 20px 40px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.scan-button-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.capture-btn-large {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.9);
+    background: transparent;
+    padding: 5px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.2s;
+}
+
+.capture-btn-large:active {
+    transform: scale(0.92);
+    border-color: rgba(255, 255, 255, 0.7);
+}
+
+.capture-inner-large {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.scan-capture-hint {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+.text-btn {
+    background: transparent;
+    border: none;
+    color: #007AFF;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 12px 24px;
+    transition: opacity 0.2s;
+}
+
+.text-btn:active {
+    opacity: 0.6;
+}
+
+/* 设置区域 */
+.settings {
+    padding: 24px 20px;
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.settings h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1rem;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #007AFF;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.form-group input[readonly] {
+    color: rgba(255, 255, 255, 0.8);
+    cursor: not-allowed;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+}
+
+/* 照片预览 */
+.photo-preview {
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.95);
+}
+
+.photo-preview img {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.preview-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.preview-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.preview-btn:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+}
+
+.share-btn {
+    background: #34C759;
+    color: #fff;
+}
+
+.save-btn {
+    background: #007AFF;
+    color: #fff;
+}
+
+.retake-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* 水印预览 */
+.watermark-preview {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+/* iOS 安装提示横幅 */
+.install-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 15px;
+    animation: slideDown 0.4s ease-out;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    position: relative;
+    z-index: 5;
+}
+
+.install-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.install-icon {
+    font-size: 32px;
+    flex-shrink: 0;
+}
+
+.install-text {
+    flex: 1;
+}
+
+.install-text strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+
+.install-text p {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.95;
+    line-height: 1.4;
+}
+
+.install-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 24px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+.install-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 页脚 */
+footer {
+    text-align: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.9);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+    position: relative;
+}
+
+footer p {
+    margin: 0;
+}
+
+/* 清除缓存按钮 */
+.clear-cache-btn {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.5);
+    padding: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.clear-cache-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.8);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.clear-cache-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.clear-cache-btn svg {
+    display: block;
+}
+
+/* 响应式设计 */
+@media (max-width: 480px) {
+    header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .step-indicator {
+        font-size: 0.85rem;
+    }
+    
+    .scan-box {
+        width: 220px;
+        height: 220px;
+    }
+    
+    .capture-btn {
+        width: 62px;
+        height: 62px;
+    }
+    
+    .capture-btn-large {
+        width: 70px;
+        height: 70px;
+    }
+    
+    .icon-btn {
+        width: 40px;
+        height: 40px;
+    }
+}
