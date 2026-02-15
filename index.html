@@ -136,6 +136,72 @@
         </footer>
     </div>
 
+    <!-- 兼容性 Polyfills -->
+    <script>
+        // Promise polyfill检测（Chrome 32+和Safari 7.1+已支持）
+        if (!window.Promise) {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"><\/script>');
+        }
+        
+        // getUserMedia兼容性封装
+        (function() {
+            if (!navigator.mediaDevices) {
+                navigator.mediaDevices = {};
+            }
+            
+            // 旧版getUserMedia适配器
+            if (!navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia = function(constraints) {
+                    var getUserMedia = navigator.getUserMedia || 
+                                     navigator.webkitGetUserMedia || 
+                                     navigator.mozGetUserMedia || 
+                                     navigator.msGetUserMedia;
+                    
+                    if (!getUserMedia) {
+                        return Promise.reject(new Error('getUserMedia不支持'));
+                    }
+                    
+                    return new Promise(function(resolve, reject) {
+                        getUserMedia.call(navigator, constraints, resolve, reject);
+                    });
+                };
+            }
+            
+            // requestAnimationFrame兼容性
+            window.requestAnimationFrame = window.requestAnimationFrame ||
+                                          window.webkitRequestAnimationFrame ||
+                                          window.mozRequestAnimationFrame ||
+                                          function(callback) {
+                                              return setTimeout(callback, 1000 / 60);
+                                          };
+            
+            window.cancelAnimationFrame = window.cancelAnimationFrame ||
+                                         window.webkitCancelAnimationFrame ||
+                                         window.mozCancelAnimationFrame ||
+                                         function(id) {
+                                             clearTimeout(id);
+                                         };
+            
+            // Canvas toBlob polyfill (for older browsers)
+            if (!HTMLCanvasElement.prototype.toBlob) {
+                Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
+                    value: function(callback, type, quality) {
+                        var canvas = this;
+                        setTimeout(function() {
+                            var binStr = atob(canvas.toDataURL(type, quality).split(',')[1]);
+                            var len = binStr.length;
+                            var arr = new Uint8Array(len);
+                            for (var i = 0; i < len; i++) {
+                                arr[i] = binStr.charCodeAt(i);
+                            }
+                            callback(new Blob([arr], { type: type || 'image/png' }));
+                        });
+                    }
+                });
+            }
+        })();
+    </script>
+    
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs2@0.0.2/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <script src="app.js"></script>

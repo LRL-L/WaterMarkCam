@@ -51,6 +51,8 @@ npx http-server -p 8000
 - Android: Chrome 53+ / Firefox 68+
 - Desktop: Chrome 53+ / Firefox 36+ / Safari 11+
 
+支持低版本浏览器，已集成兼容性 polyfills
+
 ## 常见问题
 
 **相机无法启动**

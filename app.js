@@ -112,9 +112,18 @@ class WaterMarkCam {
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
             this.video.srcObject = this.stream;
             
-            // 等待视频加载
-            await new Promise((resolve) => {
-                this.video.onloadedmetadata = resolve;
+            // 等待视频加载并播放（某些浏览器需要手动调用play）
+            await new Promise((resolve, reject) => {
+                this.video.onloadedmetadata = () => {
+                    this.video.play()
+                        .then(resolve)
+                        .catch(err => {
+                            console.warn('自動播放失敗，嘗試靜音播放:', err);
+                            // 如果自动播放失败，尝试静音播放
+                            this.video.muted = true;
+                            this.video.play().then(resolve).catch(reject);
+                        });
+                };
             });
             
             // 更新 UI
@@ -215,7 +224,13 @@ class WaterMarkCam {
             attempts++;
             
             const scanCanvas = document.createElement('canvas');
-            const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+            // 兼容性：旧浏览器可能不支持willReadFrequently选项
+            let scanCtx;
+            try {
+                scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+            } catch (e) {
+                scanCtx = scanCanvas.getContext('2d');
+            }
             
             scanCanvas.width = this.video.videoWidth;
             scanCanvas.height = this.video.videoHeight;
@@ -462,8 +477,21 @@ class WaterMarkCam {
         
         // 显示预览
         console.log('生成照片成功，切換到預覽模式');
-        this.photoPreviewImg.src = this.canvas.toDataURL('image/jpeg', 0.95);
-        this.capturedImageData = this.canvas.toDataURL('image/jpeg', 0.95);
+        
+        try {
+            this.photoPreviewImg.src = this.canvas.toDataURL('image/jpeg', 0.95);
+            this.capturedImageData = this.canvas.toDataURL('image/jpeg', 0.95);
+        } catch (error) {
+            console.error('生成照片失敗:', error);
+            // 尝试使用默认参数
+            try {
+                this.photoPreviewImg.src = this.canvas.toDataURL();
+                this.capturedImageData = this.canvas.toDataURL();
+            } catch (e) {
+                alert('生成照片失敗，請重試');
+                return;
+            }
+        }
         
         // 切换显示
         this.cameraView.style.display = 'none';
