@@ -24,12 +24,6 @@ npx http-server -p 8000
 
 访问：`http://localhost:8000`
 
-### 部署到服务器
-
-推荐平台：GitHub Pages、Vercel、Cloudflare Pages、Netlify
-
-必须使用 HTTPS 协议（相机权限要求）
-
 ## 使用方法
 
 1. 点击"启动相机"并授予权限

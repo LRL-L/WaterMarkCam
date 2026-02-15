@@ -72,7 +72,9 @@ class WaterMarkCam {
         
         // 生成初始二维码（如果有默认内容）
         if (this.qrTextInput.value.trim()) {
-            this.generateQRCode();
+            this.generateQRCode().catch(err => {
+                console.error('初始化二维码失败:', err);
+            });
         }
         
         // 检查是否支持 Web Share API
@@ -298,16 +300,23 @@ class WaterMarkCam {
         // 设置二维码内容
         this.qrTextInput.value = qrContent;
         
-        // 生成新的水印二维码
-        this.generateQRCode();
+        // 显示生成中的提示
+        this.stepIndicator.textContent = '正在生成水印...';
         
-        // 更新步驟
-        this.stepIndicator.textContent = '步驟 2/2：拍攝照片';
-        
-        // 显示成功消息，延迟确保二维码生成完成
-        setTimeout(() => {
-            this.showSuccessMessage(`二維碼識別成功：${qrContent}`);
-        }, 200);
+        // 生成新的水印二维码，等待完成后再提示
+        this.generateQRCode()
+            .then(() => {
+                console.log('✅ 二維碼水印已就緒');
+                // 更新步驟
+                this.stepIndicator.textContent = '步驟 2/2：拍攝照片';
+                // 显示成功消息
+                this.showSuccessMessage(`二維碼識別成功：${qrContent}`);
+            })
+            .catch((error) => {
+                console.error('生成二維碼水印失敗:', error);
+                this.stepIndicator.textContent = '生成失敗，請重試';
+                alert('生成二維碼水印失敗，請重新掃描');
+            });
     }
     
     showSuccessMessage(message) {
@@ -327,50 +336,76 @@ class WaterMarkCam {
         
         if (!qrText) {
             alert('請輸入二維碼內容');
-            return;
+            return Promise.reject('無內容');
         }
         
         // 清空之前的二维码
         this.qrCanvas.innerHTML = '';
         this.qrCodeReady = false;  // 标记二维码未就绪
         
-        // 生成新的二维码
-        try {
-            this.qrCode = new QRCode(this.qrCanvas, {
-                text: qrText,
-                width: this.qrSize,
-                height: this.qrSize,
-                colorDark: '#000000',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H
-            });
-            
-            // 等待二维码图片真正加载完成
-            const waitForQrImage = () => {
-                const img = this.qrCanvas.querySelector('img');
-                if (img) {
-                    // 检查多个条件确保图片真正加载完成
-                    const isComplete = img.complete;
-                    const hasNaturalDimensions = img.naturalWidth > 0 && img.naturalHeight > 0;
-                    const hasSrc = img.src && img.src.length > 0;
+        // 返回Promise，确保生成完成后再继续
+        return new Promise((resolve, reject) => {
+            try {
+                this.qrCode = new QRCode(this.qrCanvas, {
+                    text: qrText,
+                    width: this.qrSize,
+                    height: this.qrSize,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                
+                // 等待二维码图片真正加载完成，带超时控制
+                let attempts = 0;
+                const maxAttempts = 100; // 最多等待5秒 (100 * 50ms)
+                
+                const waitForQrImage = () => {
+                    attempts++;
                     
-                    if (isComplete && hasNaturalDimensions && hasSrc) {
-                        console.log('二维码生成成功，尺寸:', img.naturalWidth, 'x', img.naturalHeight);
-                        this.qrCodeReady = true;  // 标记二维码就绪
+                    if (attempts > maxAttempts) {
+                        console.error('二維碼生成超時');
+                        this.qrCodeReady = false;
+                        reject('生成超時');
                         return;
                     }
-                }
-                // 继续等待
-                setTimeout(waitForQrImage, 50);
-            };
-            
-            // 开始等待
-            setTimeout(waitForQrImage, 10);
-            
-        } catch (error) {
-            console.error('生成二維碼失敗:', error);
-            alert('生成二維碼失敗，請檢查輸入內容');
-        }
+                    
+                    const img = this.qrCanvas.querySelector('img');
+                    if (img) {
+                        // 检查多个条件确保图片真正加载完成
+                        const isComplete = img.complete;
+                        const hasNaturalDimensions = img.naturalWidth > 0 && img.naturalHeight > 0;
+                        const hasSrc = img.src && img.src.length > 0;
+                        
+                        console.log('二維碼檢測第', attempts, '次:', {
+                            isComplete,
+                            hasNaturalDimensions,
+                            naturalWidth: img.naturalWidth,
+                            hasSrc
+                        });
+                        
+                        if (isComplete && hasNaturalDimensions && hasSrc) {
+                            console.log('✅ 二维码生成成功！尺寸:', img.naturalWidth, 'x', img.naturalHeight);
+                            this.qrCodeReady = true;  // 标记二维码就绪
+                            
+                            // 额外等待100ms确保渲染完成（针对慢速设备）
+                            setTimeout(() => resolve(img), 100);
+                            return;
+                        }
+                    }
+                    
+                    // 继续等待
+                    setTimeout(waitForQrImage, 50);
+                };
+                
+                // 延迟启动检测，给QRCode.js时间初始化
+                setTimeout(waitForQrImage, 100);
+                
+            } catch (error) {
+                console.error('生成二維碼失敗:', error);
+                this.qrCodeReady = false;
+                reject(error);
+            }
+        });
     }
     
     capturePhoto() {
@@ -401,9 +436,13 @@ class WaterMarkCam {
             
             hasQrCode = isComplete && hasNaturalDimensions && hasSrc && isReady;
             
-            console.log('二維碼檢測:', {
+            console.log('📸 拍照时二維碼檢測:', {
+                hasQrText,
+                hasQrImg: !!qrImg,
                 isComplete,
                 hasNaturalDimensions,
+                naturalWidth: qrImg.naturalWidth,
+                naturalHeight: qrImg.naturalHeight,
                 hasSrc,
                 isReady,
                 finalResult: hasQrCode
@@ -412,8 +451,18 @@ class WaterMarkCam {
         
         // 如果用户输入了二维码内容但图片还没生成完成，提示等待
         if (hasQrText && !hasQrCode) {
-            this.showSuccessMessage('二維碼正在生成中，請稍後再試');
-            console.log('二維碼未就緒，等待生成');
+            console.warn('⚠️ 二維碼未就緒，拒絕拍照');
+            this.showSuccessMessage('二維碼正在生成中，請稍後再試（3-5秒）');
+            
+            // 尝试触发二维码重新检测（某些情况下qrCodeReady可能未正确设置）
+            if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
+                console.log('🔄 二維碼圖片存在但標誌未設置，嘗試修復...');
+                this.qrCodeReady = true;
+                // 延迟后允许用户重试
+                setTimeout(() => {
+                    this.showSuccessMessage('請再次點擊拍照按鈕');
+                }, 1500);
+            }
             return;
         }
         
