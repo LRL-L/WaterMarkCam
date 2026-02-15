@@ -402,90 +402,55 @@ class WaterMarkCam {
             return Promise.reject('無內容');
         }
         
+        console.log('📝 開始生成二維碼:', qrText);
+        
         // 清空之前的二维码
         this.qrCanvas.innerHTML = '';
-        this.qrCodeReady = false;  // 标记二维码未就绪
+        this.qrCodeReady = false;
         
-        // 返回Promise，确保生成完成后再继续
+        // 使用纯Canvas绘制，不依赖DOM img元素
         return new Promise((resolve, reject) => {
             try {
-                this.qrCode = new QRCode(this.qrCanvas, {
-                    text: qrText,
-                    width: this.qrSize,
-                    height: this.qrSize,
-                    colorDark: '#000000',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.H
-                });
+                // 创建二维码对象（纯算法，不操作DOM）
+                const qr = qrcode(0, 'H'); // 0=自动选择版本, H=高纠错
+                qr.addData(qrText);
+                qr.make();
                 
-                // 等待二维码图片真正加载完成，带超时控制
-                let attempts = 0;
-                const maxAttempts = 100; // 最多等待5秒 (100 * 50ms)
+                const moduleCount = qr.getModuleCount();
+                const cellSize = Math.floor(this.qrSize / moduleCount);
+                const qrPixelSize = cellSize * moduleCount;
                 
-                const waitForQrImage = () => {
-                    attempts++;
-                    
-                    if (attempts > maxAttempts) {
-                        console.error('❌ 二維碼生成超時');
-                        // 输出容器内的所有元素，帮助调试
-                        console.log('🔍 qrCanvas 内容:', this.qrCanvas.innerHTML.substring(0, 200));
-                        console.log('🔍 qrCanvas 子元素:', this.qrCanvas.children);
-                        this.qrCodeReady = false;
-                        reject('生成超時');
-                        return;
-                    }
-                    
-                    // 首先检查是否有 canvas（QRCode.js 可能先生成 canvas）
-                    const canvas = this.qrCanvas.querySelector('canvas');
-                    const img = this.qrCanvas.querySelector('img');
-                    
-                    if (attempts === 1) {
-                        console.log('🔍 第一次检测 - canvas:', !!canvas, 'img:', !!img);
-                    }
-                    
-                    if (img) {
-                        // 检查多个条件确保图片真正加载完成
-                        const isComplete = img.complete;
-                        const hasNaturalDimensions = img.naturalWidth > 0 && img.naturalHeight > 0;
-                        const srcValue = img.src || '';
-                        const hasSrc = srcValue.length > 0;
-                        
-                        if (attempts <= 3 || attempts % 20 === 0) {
-                            console.log('二維碼檢測第', attempts, '次:', {
-                                isComplete,
-                                hasNaturalDimensions,
-                                naturalWidth: img.naturalWidth,
-                                srcLength: srcValue.length,
-                                srcStart: srcValue.substring(0, 30)
-                            });
-                        }
-                        
-                        if (isComplete && hasNaturalDimensions && hasSrc) {
-                            console.log('✅ 二维码生成成功！尺寸:', img.naturalWidth, 'x', img.naturalHeight);
-                            this.qrCodeReady = true;
-                            setTimeout(() => resolve(img), 100);
-                            return;
-                        }
-                    } else if (canvas && attempts > 10) {
-                        // 如果只有 canvas 没有 img，尝试直接使用 canvas
-                        console.log('⚠️ 只检测到 canvas，尝试直接使用');
-                        if (canvas.width > 0 && canvas.height > 0) {
-                            console.log('✅ 使用 canvas 代替 img，尺寸:', canvas.width, 'x', canvas.height);
-                            this.qrCodeReady = true;
-                            // 将 canvas 转换为图片供后续使用
-                            const tempImg = new Image();
-                            tempImg.src = canvas.toDataURL();
-                            tempImg.onload = () => resolve(tempImg);
-                            return;
+                console.log('🔧 二維碼模块数:', moduleCount, '单元格大小:', cellSize);
+                
+                // 创建Canvas直接绘制
+                const canvas = document.createElement('canvas');
+                canvas.width = qrPixelSize;
+                canvas.height = qrPixelSize;
+                const ctx = canvas.getContext('2d');
+                
+                // 白色背景
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, qrPixelSize, qrPixelSize);
+                
+                // 绘制二维码（黑色方块）
+                ctx.fillStyle = '#000000';
+                for (let row = 0; row < moduleCount; row++) {
+                    for (let col = 0; col < moduleCount; col++) {
+                        if (qr.isDark(row, col)) {
+                            ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
                         }
                     }
-                    
-                    // 继续等待
-                    setTimeout(waitForQrImage, 50);
-                };
+                }
                 
-                // 延迟启动检测，给QRCode.js时间初始化
-                setTimeout(waitForQrImage, 100);
+                // 将Canvas添加到容器
+                this.qrCanvas.appendChild(canvas);
+                
+                console.log('✅ 二維碼Canvas繪製完成');
+                this.qrCodeReady = true;
+                
+                // 立即resolve，因为Canvas是同步绘制的
+                resolve(canvas);
+
                 
             } catch (error) {
                 console.error('生成二維碼失敗:', error);
@@ -509,46 +474,39 @@ class WaterMarkCam {
         // 绘制视频帧
         ctx.drawImage(this.video, 0, 0);
         
-        // 获取二维码图片（如果有的话）
-        const qrImg = this.qrCanvas.querySelector('img');
+        // 获取二维码Canvas（不再依赖img元素）
+        const qrCanvasElement = this.qrCanvas.querySelector('canvas');
         const hasQrText = this.qrTextInput.value.trim();
         
-        // 更可靠的二维码就绪检测
+        // 更可靠的二维码就绪检测（使用Canvas）
         let hasQrCode = false;
-        if (qrImg && hasQrText) {
-            const isComplete = qrImg.complete;
-            const hasNaturalDimensions = qrImg.naturalWidth > 0 && qrImg.naturalHeight > 0;
-            const hasSrc = qrImg.src && qrImg.src.length > 0;
+        if (qrCanvasElement && hasQrText) {
+            const hasValidSize = qrCanvasElement.width > 0 && qrCanvasElement.height > 0;
             const isReady = this.qrCodeReady === true;
             
-            hasQrCode = isComplete && hasNaturalDimensions && hasSrc && isReady;
+            hasQrCode = hasValidSize && isReady;
             
-            console.log('📸 拍照时二維碼檢測:', {
+            console.log('📸 拍照时二維碼檢測 (Canvas模式):', {
                 hasQrText,
-                hasQrImg: !!qrImg,
-                isComplete,
-                hasNaturalDimensions,
-                naturalWidth: qrImg.naturalWidth,
-                naturalHeight: qrImg.naturalHeight,
-                hasSrc,
+                hasQrCanvas: !!qrCanvasElement,
+                canvasWidth: qrCanvasElement ? qrCanvasElement.width : 0,
+                canvasHeight: qrCanvasElement ? qrCanvasElement.height : 0,
                 isReady,
                 finalResult: hasQrCode
             });
         }
         
-        // 如果用户输入了二维码内容但图片还没生成完成，提示等待
+        // 如果用户输入了二维码内容但Canvas还没生成完成，提示等待
         if (hasQrText && !hasQrCode) {
             console.warn('⚠️ 二維碼未就緒，拒絕拍照');
-            this.showSuccessMessage('二維碼正在生成中，請稍後再試（3-5秒）');
             
-            // 尝试触发二维码重新检测（某些情况下qrCodeReady可能未正确设置）
-            if (qrImg && qrImg.complete && qrImg.naturalWidth > 0) {
-                console.log('🔄 二維碼圖片存在但標誌未設置，嘗試修復...');
+            // Canvas是同步生成的，如果存在就应该可用
+            if (qrCanvasElement && qrCanvasElement.width > 0) {
+                console.log('🔄 二維碼Canvas存在，設置為就緒');
                 this.qrCodeReady = true;
-                // 延迟后允许用户重试
-                setTimeout(() => {
-                    this.showSuccessMessage('請再次點擊拍照按鈕');
-                }, 1500);
+                this.showSuccessMessage('二維碼已就緒，請再次點擊拍照按鈕');
+            } else {
+                this.showSuccessMessage('二維碼正在生成中，請稍後再試');
             }
             return;
         }
@@ -559,7 +517,7 @@ class WaterMarkCam {
         const borderRadius = 10;
         const opacity = this.opacity;
         
-        // 1. 绘制二维码在左下角（如果有的话）
+        // 1. 绘制二维码在左下角（如果有的话）- 使用Canvas
         if (hasQrCode) {
             const qrX = padding;
             const qrY = this.canvas.height - qrSize - bgPadding * 2 - padding;
@@ -570,10 +528,12 @@ class WaterMarkCam {
                           qrSize + bgPadding * 2, qrSize + bgPadding * 2, borderRadius);
             ctx.fill();
             
-            // 绘制二维码
+            // 绘制二维码（从Canvas绘制）
             ctx.globalAlpha = opacity;
-            ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+            ctx.drawImage(qrCanvasElement, qrX, qrY, qrSize, qrSize);
             ctx.globalAlpha = 1.0;
+            
+            console.log('✅ 二維碼已添加到照片 (Canvas模式)');
         }
         
         // 2. 绘制时间戳在右下角（固定显示）
