@@ -1,123 +1,67 @@
-# 📷 WaterMarkCam - 二维码水印相机
+# WaterMarkCam - 二维码水印相机
 
-一个基于纯网页技术的二维码水印相机应用，支持 iOS 和 Android 设备。
+基于纯网页技术的二维码水印相机应用，支持 iOS 和 Android 设备。
 
-## ✨ 功能特点
+## 功能特点
 
-- 📸 **实时相机预览** - 直接调用设备摄像头
-- 🔍 **二维码扫描** - 自动识别和读取二维码
-- 🔄 **前后摄像头切换** - 支持切换前后置摄像头
-- 📱 **二维码水印** - 自动生成并添加二维码水印
-- 💾 **保存与分享** - 一键保存或分享带水印的照片
-- 🌐 **跨平台支持** - iOS Safari 和 Android Chrome 完美运行
+- 实时相机预览
+- 二维码扫描识别
+- 前后摄像头切换
+- 自动添加二维码水印
+- 保存和分享照片
 
-## 🚀 快速开始
+## 快速开始
 
-### 在线使用
+### 本地测试
 
-1. **本地测试**（推荐）：
-   ```bash
-   # 方法 1: 使用 Python 启动本地服务器
-   python -m http.server 8000
-   
-   # 方法 2: 使用 Node.js
-   npx http-server -p 8000
-   ```
-   然后访问：`http://localhost:8000`
+```bash
+# 使用 Python
+python -m http.server 8000
 
-2. **部署到服务器**：
-   - 直接上传所有文件到支持 HTTPS 的服务器
-   - 推荐平台：**Netlify**、Vercel、Cloudflare Pages、GitHub Pages
-
-### 设备要求
-
-**iOS:**
-- iOS 11.3 或更高版本
-- Safari 浏览器
-
-**Android:**
-- Android 5.0 或更高版本
-- Chrome、Firefox 或 Edge 浏览器
-
-**重要提示：** 
-- 必须使用 **HTTPS** 协议（生产环境）
-- localhost 可以使用 HTTP（开发测试）
-
-## 📖 使用说明
-
-1. **启动相机**
-   - 点击"启动相机"按钮
-   - 授予浏览器摄像头访问权限
-
-2. **扫描二维码**
-   - 点击"扫描二维码"按钮
-   - 将二维码放在扫描框内
-   - 点击"捕捉二维码"识别内容
-   - 识别成功后自动生成水印
-
-3. **拍照保存**
-   - 点击拍照按钮
-   - 预览带水印的照片
-   - 选择"保存至相簿"（移动设备）或"下载照片"
-   - 或点击"重拍"返回相机
-
-## 🛠️ 技术栈
-
-- **HTML5** - 页面结构
-- **CSS3** - 样式和动画
-- **JavaScript (ES6+)** - 核心逻辑
-- **getUserMedia API** - 相机访问
-- **Canvas API** - 图像处理
-- **QRCode.js** - 二维码生成
-- **jsQR** - 二维码识别
-
-## 📁 项目结构
-
-```
-WaterMarkCam/
-├── index.html              # 主页面
-├── style.css               # 样式文件
-├── app.js                  # JavaScript 核心代码
-└── README.md               # 项目说明
+# 或使用 Node.js
+npx http-server -p 8000
 ```
 
-## 🔧 浏览器兼容性
+访问：`http://localhost:8000`
 
-| 浏览器 | 版本 | 支持情况 |
-|--------|------|---------|
-| iOS Safari | 11.3+ | ✅ 完全支持 |
-| Android Chrome | 53+ | ✅ 完全支持 |
-| Android Firefox | 68+ | ✅ 完全支持 |
-| Desktop Chrome | 53+ | ✅ 完全支持 |
-| Desktop Firefox | 36+ | ✅ 完全支持 |
-| Desktop Safari | 11+ | ✅ 完全支持 |
+### 部署到服务器
 
-## ⚠️ 常见问题
+推荐平台：GitHub Pages、Vercel、Cloudflare Pages、Netlify
 
-### 1. 相机无法启动
-- **检查权限**：确保已授予浏览器摄像头访问权限
-- **检查协议**：必须使用 HTTPS 或 localhost
-- **检查设备**：确认设备有可用的摄像头
+必须使用 HTTPS 协议（相机权限要求）
 
-### 2. iOS Safari 无法访问相机
-- 更新到 iOS 11.3 或更高版本
-- 在 Safari 设置中允许摄像头访问
-- 确保使用 HTTPS
+## 使用方法
 
-### 3. 保存的照片在哪里
-- iOS：下载到"文件"应用的"下载"文件夹
-- Android：下载到设备的"下载"文件夹
-- 可通过浏览器的下载管理查看
+1. 点击"启动相机"并授予权限
+2. 点击"扫描二维码"识别二维码内容
+3. 点击拍照按钮
+4. 下载或分享带水印的照片
 
-## 🎯 后续优化建议
+## 技术栈
 
-- [x] 二维码扫描功能 ✅
-- [ ] 添加文本水印功能
-- [ ] 支持多个二维码
-- [ ] 添加滤镜效果
-- [ ] 支持批量处理
-- [ ] 添加历史记录
+- HTML5 / CSS3 / JavaScript (ES6+)
+- getUserMedia API - 相机访问
+- Canvas API - 图像处理
+- QRCode.js - 二维码生成
+- jsQR - 二维码识别
 
-## 📄 许可证
+## 浏览器要求
 
-MIT License - 可自由使用、修改和分发
+- iOS: Safari 11.3+
+- Android: Chrome 53+ / Firefox 68+
+- Desktop: Chrome 53+ / Firefox 36+ / Safari 11+
+
+## 常见问题
+
+**相机无法启动**
+- 检查浏览器权限设置
+- 确保使用 HTTPS 或 localhost
+- 确认设备有可用摄像头
+
+**照片保存位置**
+- iOS: "文件"应用的"下载"文件夹
+- Android: 设备的"下载"文件夹
+
+## 许可证
+
+MIT License
