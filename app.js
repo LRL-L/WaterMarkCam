@@ -115,18 +115,40 @@ class WaterMarkCam {
             this.stream = await navigator.mediaDevices.getUserMedia(constraints);
             this.video.srcObject = this.stream;
             
-            // 等待视频加载并播放（某些浏览器需要手动调用play）
+            // 等待视频加载并播放（Android设备特别处理）
             await new Promise((resolve, reject) => {
                 this.video.onloadedmetadata = () => {
+                    // Android某些设备需要手动设置属性
+                    this.video.setAttribute('autoplay', '');
+                    this.video.setAttribute('playsinline', '');
+                    this.video.setAttribute('muted', '');
+                    
                     this.video.play()
-                        .then(resolve)
+                        .then(() => {
+                            console.log('✅ 视频播放成功');
+                            resolve();
+                        })
                         .catch(err => {
-                            console.warn('自動播放失敗，嘗試靜音播放:', err);
-                            // 如果自动播放失败，尝试静音播放
+                            console.warn('⚠️ 自動播放失敗，嘗試靜音播放:', err);
+                            // 如果自动播放失败，确保静音后重试
                             this.video.muted = true;
-                            this.video.play().then(resolve).catch(reject);
+                            this.video.play()
+                                .then(() => {
+                                    console.log('✅ 靜音播放成功');
+                                    resolve();
+                                })
+                                .catch(err2 => {
+                                    console.error('❌ 播放失败:', err2);
+                                    // 最后尝试：用户手动触发
+                                    reject(err2);
+                                });
                         });
                 };
+                
+                // 超时保护（10秒）
+                setTimeout(() => {
+                    reject(new Error('視頻載入超時'));
+                }, 10000);
             });
             
             // 更新 UI
@@ -624,7 +646,15 @@ class WaterMarkCam {
         const link = document.createElement('a');
         link.download = `watermark_${timestamp}.jpg`;
         link.href = this.capturedImageData;
+        
+        // Android兼容性：某些浏览器需要将链接添加到DOM
+        document.body.appendChild(link);
         link.click();
+        
+        // 清理（延迟删除，确保下载触发）
+        setTimeout(() => {
+            document.body.removeChild(link);
+        }, 100);
         
         // 显示提示
         this.saveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg> 已下載';
