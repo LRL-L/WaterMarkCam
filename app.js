@@ -103,11 +103,12 @@ class WaterMarkCam {
             this.startBtn.classList.add('loading');
             this.startBtn.textContent = '启动中...';
             
+            // 優化：降低分辨率要求，提高兼容性和識別速度
             const constraints = {
                 video: {
                     facingMode: this.currentFacingMode,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                    width: { ideal: 1280, max: 1920 },
+                    height: { ideal: 720, max: 1080 }
                 },
                 audio: false
             };
@@ -122,6 +123,8 @@ class WaterMarkCam {
                     this.video.setAttribute('autoplay', '');
                     this.video.setAttribute('playsinline', '');
                     this.video.setAttribute('muted', '');
+                    
+                    console.log('📹 視頻尺寸:', this.video.videoWidth, 'x', this.video.videoHeight);
                     
                     this.video.play()
                         .then(() => {
@@ -279,19 +282,49 @@ class WaterMarkCam {
         const scanCanvas = document.createElement('canvas');
         const scanCtx = scanCanvas.getContext('2d');
         
-        scanCanvas.width = this.video.videoWidth;
-        scanCanvas.height = this.video.videoHeight;
+        const videoWidth = this.video.videoWidth;
+        const videoHeight = this.video.videoHeight;
         
-        if (scanCanvas.width > 0 && scanCanvas.height > 0) {
+        if (videoWidth > 0 && videoHeight > 0) {
             try {
-                // 繪製當前視頻幀
-                scanCtx.drawImage(this.video, 0, 0, scanCanvas.width, scanCanvas.height);
+                // 優化1: 只掃描中心區域（70%），提高識別速度和準確率
+                const scanRegion = 0.7;
+                const scanWidth = Math.floor(videoWidth * scanRegion);
+                const scanHeight = Math.floor(videoHeight * scanRegion);
+                const offsetX = Math.floor((videoWidth - scanWidth) / 2);
+                const offsetY = Math.floor((videoHeight - scanHeight) / 2);
                 
-                // 獲取圖像數據
-                const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+                // 優化2: 降低分辨率以提高性能（保持最大800px）
+                const maxDimension = 800;
+                let targetWidth = scanWidth;
+                let targetHeight = scanHeight;
                 
-                // 使用 jsQR 識別二維碼
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                if (scanWidth > maxDimension || scanHeight > maxDimension) {
+                    const scale = Math.min(maxDimension / scanWidth, maxDimension / scanHeight);
+                    targetWidth = Math.floor(scanWidth * scale);
+                    targetHeight = Math.floor(scanHeight * scale);
+                }
+                
+                scanCanvas.width = targetWidth;
+                scanCanvas.height = targetHeight;
+                
+                // 繪製視頻中心區域到 canvas
+                scanCtx.drawImage(
+                    this.video,
+                    offsetX, offsetY, scanWidth, scanHeight,
+                    0, 0, targetWidth, targetHeight
+                );
+                
+                // 優化3: 增強對比度和亮度，提高識別率
+                const imageData = scanCtx.getImageData(0, 0, targetWidth, targetHeight);
+                this.enhanceImageContrast(imageData);
+                scanCtx.putImageData(imageData, 0, 0);
+                
+                // 重新獲取增強後的圖像數據
+                const enhancedImageData = scanCtx.getImageData(0, 0, targetWidth, targetHeight);
+                
+                // 使用 jsQR 識別二維碼，添加更多選項
+                const code = jsQR(enhancedImageData.data, enhancedImageData.width, enhancedImageData.height, {
                     inversionAttempts: "attemptBoth",
                 });
                 
@@ -306,8 +339,32 @@ class WaterMarkCam {
             }
         }
         
-        // 繼續掃描下一幀
-        this.scanAnimationId = requestAnimationFrame(() => this.scanQrCode());
+        // 優化4: 控制掃描頻率（每 100ms 掃描一次，避免過度消耗資源）
+        setTimeout(() => {
+            this.scanAnimationId = requestAnimationFrame(() => this.scanQrCode());
+        }, 100);
+    }
+    
+    enhanceImageContrast(imageData) {
+        // 增強圖像對比度和亮度，提高二維碼識別率
+        const data = imageData.data;
+        const factor = 1.5; // 對比度增強係數
+        const brightness = 10; // 亮度增加值
+        
+        for (let i = 0; i < data.length; i += 4) {
+            // 轉換為灰度值（提高識別速度）
+            const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            
+            // 應用對比度和亮度調整
+            let enhanced = ((gray - 128) * factor) + 128 + brightness;
+            enhanced = Math.max(0, Math.min(255, enhanced));
+            
+            // 設置 RGB 為相同值（灰度圖）
+            data[i] = enhanced;     // R
+            data[i + 1] = enhanced; // G
+            data[i + 2] = enhanced; // B
+            // Alpha 通道保持不變
+        }
     }
     
     onQrCodeDetected(qrContent) {
