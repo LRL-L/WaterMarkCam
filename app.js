@@ -51,6 +51,7 @@ class WaterMarkCam {
         this.qrCode = null;
         this.qrCodeReady = false; // 二维码是否就绪
         this.capturedImageData = null;
+        this.lastQrContent = null; // 保存最后一次扫描的内容
         
         // 初始化
         this.init();
@@ -299,23 +300,63 @@ class WaterMarkCam {
         
         // 设置二维码内容
         this.qrTextInput.value = qrContent;
+        this.lastQrContent = qrContent; // 保存内容供重试
         
         // 显示生成中的提示
         this.stepIndicator.textContent = '正在生成水印...';
         
-        // 生成新的水印二维码，等待完成后再提示
+        // 生成新的水印二维码，带重试机制
+        this.generateQRCodeWithRetry(qrContent, 0);
+    }
+    
+    generateQRCodeWithRetry(qrContent, retryCount = 0) {
+        const maxRetries = 2; // 最多重试次数
+        
         this.generateQRCode()
             .then(() => {
                 console.log('✅ 二維碼水印已就緒');
                 // 更新步驟
                 this.stepIndicator.textContent = '步驟 2/2：拍攝照片';
                 // 显示成功消息
-                this.showSuccessMessage(`二維碼識別成功：${qrContent}`);
+                const displayText = qrContent.length > 30 ? qrContent.substring(0, 30) + '...' : qrContent;
+                this.showSuccessMessage(`二維碼識別成功：${displayText}`);
             })
             .catch((error) => {
-                console.error('生成二維碼水印失敗:', error);
-                this.stepIndicator.textContent = '生成失敗，請重試';
-                alert('生成二維碼水印失敗，請重新掃描');
+                console.error(`生成二維碼失敗 (第${retryCount + 1}次嘗試):`, error);
+                
+                // 如果还有重试次数，自动重试
+                if (retryCount < maxRetries) {
+                    console.log(`🔄 正在重试... (${retryCount + 1}/${maxRetries})`);
+                    this.stepIndicator.textContent = `重試中 (${retryCount + 1}/${maxRetries})...`;
+                    
+                    // 清空之前的生成尝试
+                    this.qrCanvas.innerHTML = '';
+                    this.qrCodeReady = false;
+                    
+                    // 延迟500ms后重试
+                    setTimeout(() => {
+                        this.generateQRCodeWithRetry(qrContent, retryCount + 1);
+                    }, 500);
+                } else {
+                    // 所有重试都失败了
+                    this.stepIndicator.textContent = '生成失敗，請重試';
+                    
+                    // 提供更详细的错误信息
+                    let errorMsg = '生成二維碼水印失敗\n\n';
+                    
+                    if (error === '生成超時') {
+                        errorMsg += '原因：生成超时（5秒）\n';
+                        errorMsg += '建议：\n1. 檢查二維碼內容是否過長\n2. 關閉其他應用程式釋放內存\n3. 再次掃描二維碼';
+                    } else {
+                        errorMsg += `原因：${error}\n`;
+                        errorMsg += '建议：\n1. 刷新頁面重試\n2. 清除瀏覽器緩存\n3. 檢查網路連接';
+                    }
+                    
+                    alert(errorMsg);
+                    
+                    // 自动返回扫描状态，方便用户重试
+                    console.log('🔄 準備重新掃描...');
+                }
             });
     }
     
