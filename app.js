@@ -103,12 +103,12 @@ class WaterMarkCam {
             this.startBtn.classList.add('loading');
             this.startBtn.textContent = '启动中...';
             
-            // 優化：降低分辨率要求，提高兼容性和識別速度
+            // 恢復高分辨率以確保拍照質量（掃描時會降低處理分辨率）
             const constraints = {
                 video: {
                     facingMode: this.currentFacingMode,
-                    width: { ideal: 1280, max: 1920 },
-                    height: { ideal: 720, max: 1080 }
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
                 },
                 audio: false
             };
