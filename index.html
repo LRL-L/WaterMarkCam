@@ -6,6 +6,11 @@
     
     <title>水印相機</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2196F3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="水印相機">
 </head>
 <body>
     <div class="container">
@@ -249,8 +254,23 @@
     </script>
     
     <!-- 使用纯Canvas实现的二维码库，兼容性更好 -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="libs/qrcode.js"></script>
+    <script src="libs/jsQR.min.js"></script>
     <script src="app.js?v=1.0.3"></script>
+    
+    <!-- PWA Service Worker 注册 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(function(registration) {
+                        console.log('✅ Service Worker 注册成功:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('❌ Service Worker 注册失败:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
