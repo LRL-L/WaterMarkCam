@@ -1,6 +1,6 @@
 // Service Worker for WaterMarkCam PWA
 // 版本号 - 每次更新文件时修改此版本号即可触发缓存更新
-const CACHE_VERSION = 'v1.0.3';
+const CACHE_VERSION = 'v1.0.4';
 const CACHE_NAME = `watermark-cam-${CACHE_VERSION}`;
 
 // 需要缓存的文件列表
