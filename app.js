@@ -69,6 +69,10 @@ class WaterMarkCam {
         // 自动连接控制
         this.userManuallyDisconnected = false; // 用户是否手动断开连接
         
+        // 检测 PWA 模式
+        this.isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                     window.navigator.standalone === true;
+        
         // 初始化
         this.init();
     }
@@ -104,6 +108,9 @@ class WaterMarkCam {
         
         // 初始化 Google Drive API
         this.initGoogleDrive();
+        
+        // 日志运行模式
+        console.log('📱 运行模式:', this.isPWA ? 'PWA 独立模式' : '浏览器模式');
     }
     
     checkBrowserSupport() {
@@ -939,6 +946,15 @@ class WaterMarkCam {
     
     async onDriveConnected() {
         try {
+            console.log('🔄 开始初始化文件夹...');
+            console.log('Access Token:', this.accessToken ? '已获取' : '未获取');
+            
+            // 确保 gapi.client 已初始化
+            if (!window.gapi || !window.gapi.client || !window.gapi.client.drive) {
+                console.log('⚠️ gapi.client.drive 未就绪，重新初始化...');
+                await this.reinitializeGapi();
+            }
+            
             // 确保文件夹存在
             await this.ensureDriveFolder();
             
@@ -954,10 +970,41 @@ class WaterMarkCam {
             console.log('✅ Google Drive 连接成功');
         } catch (error) {
             console.error('文件夹初始化失败:', error);
-            alert('雲端文件夾初始化失敗');
+            console.error('错误详情:', {
+                message: error.message,
+                stack: error.stack,
+                hasToken: !!this.accessToken,
+                hasGapi: !!window.gapi,
+                hasClient: !!(window.gapi && window.gapi.client),
+                hasDrive: !!(window.gapi && window.gapi.client && window.gapi.client.drive)
+            });
+            alert('雲端文件夾初始化失敗：' + error.message + '\n\n請嘗試在 Safari 瀏覽器中打開使用');
             this.driveStatusText.textContent = '連接雲端';
             this.driveConnectBtn.disabled = false;
         }
+    }
+    
+    async reinitializeGapi() {
+        console.log('重新初始化 gapi.client...');
+        return new Promise((resolve, reject) => {
+            if (!window.gapi) {
+                reject(new Error('gapi 库未加载'));
+                return;
+            }
+            
+            gapi.load('client', () => {
+                gapi.client.init({
+                    apiKey: this.GOOGLE_API_KEY || '',
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+                }).then(() => {
+                    console.log('✅ gapi.client 重新初始化完成');
+                    resolve();
+                }).catch(err => {
+                    console.error('gapi.client 初始化失败:', err);
+                    reject(err);
+                });
+            });
+        });
     }
     
     disconnectDrive() {
@@ -982,9 +1029,16 @@ class WaterMarkCam {
     async ensureDriveFolder() {
         try {
             // 设置访问令牌
+            if (!this.accessToken) {
+                throw new Error('Access Token 未获取');
+            }
+            
+            console.log('⚙️ 设置 Access Token...');
             gapi.client.setToken({
                 access_token: this.accessToken
             });
+            
+            console.log('🔍 搜索现有文件夹:', this.DRIVE_FOLDER_NAME);
             
             // 搜索是否已存在该文件夹
             const response = await gapi.client.drive.files.list({
@@ -993,12 +1047,15 @@ class WaterMarkCam {
                 spaces: 'drive'
             });
             
-            if (response.result.files.length > 0) {
+            console.log('搜索结果:', response);
+            
+            if (response.result.files && response.result.files.length > 0) {
                 // 文件夹已存在
                 this.driveFolderId = response.result.files[0].id;
                 console.log('📁 找到现有文件夹:', this.driveFolderId);
             } else {
                 // 创建新文件夹
+                console.log('📁 创建新文件夹...');
                 const folderMetadata = {
                     name: this.DRIVE_FOLDER_NAME,
                     mimeType: 'application/vnd.google-apps.folder'
@@ -1010,11 +1067,17 @@ class WaterMarkCam {
                 });
                 
                 this.driveFolderId = folder.result.id;
-                console.log('📁 创建新文件夹:', this.driveFolderId);
+                console.log('📁 创建新文件夹成功:', this.driveFolderId);
             }
         } catch (error) {
-            console.error('文件夹检查/创建失败:', error);
-            throw error;
+            console.error('❌ ensureDriveFolder 失败:', error);
+            console.error('错误详情:', {
+                message: error.message,
+                result: error.result,
+                status: error.status,
+                statusText: error.statusText
+            });
+            throw new Error('文件夹操作失败: ' + (error.result?.error?.message || error.message));
         }
     }
     
@@ -1034,6 +1097,16 @@ class WaterMarkCam {
             this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 上傳中...';
             this.uploadDriveBtn.disabled = true;
             this.driveConnectBtn.classList.add('uploading');
+            
+            console.log('📤 开始上传照片...');
+            console.log('Folder ID:', this.driveFolderId);
+            console.log('Access Token:', this.accessToken ? '存在' : '不存在');
+            
+            // 确保 gapi.client 已初始化（PWA 模式可能需要）
+            if (!window.gapi || !window.gapi.client || !window.gapi.client.drive) {
+                console.log('⚠️ 上传前检测到 gapi 未就绪，重新初始化...');
+                await this.reinitializeGapi();
+            }
             
             // 设置访问令牌
             gapi.client.setToken({
