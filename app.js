@@ -21,6 +21,18 @@ class WaterMarkCam {
         this.saveBtn = document.getElementById('saveBtn');
         this.shareBtn = document.getElementById('shareBtn');
         this.retakeBtn = document.getElementById('retakeBtn');
+        this.driveConnectBtn = document.getElementById('driveConnectBtn');
+        this.driveStatusText = document.getElementById('driveStatusText');
+        this.uploadDriveBtn = document.getElementById('uploadDriveBtn');
+        
+        // 文件夹管理元素
+        this.folderNameInput = document.getElementById('folderNameInput');
+        this.addFolderBtn = document.getElementById('addFolderBtn');
+        this.folderList = document.getElementById('folderList');
+        this.folderDialog = document.getElementById('folderDialog');
+        this.folderOptions = document.getElementById('folderOptions');
+        this.confirmFolderBtn = document.getElementById('confirmFolderBtn');
+        this.cancelFolderBtn = document.getElementById('cancelFolderBtn');
         
         // 步驟指示器
         this.stepIndicator = document.getElementById('stepIndicator');
@@ -53,6 +65,24 @@ class WaterMarkCam {
         this.capturedImageData = null;
         this.lastQrContent = null; // 保存最后一次扫描的内容
         
+        // Google Drive 配置
+        this.GOOGLE_CLIENT_ID = '929594650238-cu7drqo4qt3be9s4imnha9a9589n6e4j.apps.googleusercontent.com';
+        this.GOOGLE_API_KEY = ''; // 可选：如果需要 API Key
+        this.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+        this.DRIVE_FOLDER_NAME = 'WaterMarkCam Photos';
+        this.isDriveConnected = false;
+        this.accessToken = null;
+        this.driveFolderId = null;
+        this.tokenClient = null; // Google Identity Services Token Client
+        
+        // 文件夹管理
+        this.customFolders = [];
+        this.selectedFolder = null;
+        this.loadCustomFolders();
+        
+        // 自动连接控制
+        this.userManuallyDisconnected = false; // 用户是否手动断开连接
+        
         // 初始化
         this.init();
     }
@@ -68,6 +98,16 @@ class WaterMarkCam {
         this.saveBtn.addEventListener('click', () => this.savePhoto());
         this.shareBtn.addEventListener('click', () => this.sharePhoto());
         this.retakeBtn.addEventListener('click', () => this.retake());
+        this.driveConnectBtn.addEventListener('click', () => this.handleDriveConnect());
+        this.uploadDriveBtn.addEventListener('click', () => this.uploadToDrive());
+        
+        // 文件夹管理事件
+        this.addFolderBtn.addEventListener('click', () => this.addFolder());
+        this.folderNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addFolder();
+        });
+        this.confirmFolderBtn.addEventListener('click', () => this.confirmFolderSelection());
+        this.cancelFolderBtn.addEventListener('click', () => this.closeFolderDialog());
         
         // 时间固定显示，移除相关事件监听
         
@@ -83,6 +123,9 @@ class WaterMarkCam {
         
         // 检查浏览器支持
         this.checkBrowserSupport();
+        
+        // 初始化 Google Drive API
+        this.initGoogleDrive();
     }
     
     checkBrowserSupport() {
@@ -774,6 +817,487 @@ class WaterMarkCam {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
+        }
+    }
+    
+    // ===== Google Drive 云端存储功能 =====
+    
+    initGoogleDrive() {
+        // 等待 Google API 客户端库加载
+        const waitForGapi = () => {
+            return new Promise((resolve) => {
+                if (typeof gapi !== 'undefined') {
+                    gapi.load('client', () => {
+                        gapi.client.init({
+                            apiKey: this.GOOGLE_API_KEY || '',
+                            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+                        }).then(() => {
+                            console.log('✅ Google API 客户端已初始化');
+                            resolve();
+                        }).catch(err => {
+                            console.error('Google API 初始化失败:', err);
+                            resolve(); // 即使失败也继续
+                        });
+                    });
+                } else {
+                    console.warn('gapi 未加载，3秒后重试...');
+                    setTimeout(() => waitForGapi().then(resolve), 3000);
+                }
+            });
+        };
+        
+        // 等待 Google Identity Services 加载
+        const waitForGIS = () => {
+            return new Promise((resolve) => {
+                const checkGIS = () => {
+                    if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+                        this.tokenClient = google.accounts.oauth2.initTokenClient({
+                            client_id: this.GOOGLE_CLIENT_ID,
+                            scope: this.DRIVE_SCOPE,
+                            callback: (response) => {
+                                if (response.error) {
+                                    console.log('OAuth 响应错误:', response.error);
+                                    
+                                    // 静默登录失败是正常情况，不需要弹窗
+                                    if (response.error !== 'popup_closed' && 
+                                        response.error !== 'access_denied' &&
+                                        response.error !== 'user_logged_out') {
+                                        console.error('OAuth 错误:', response);
+                                        alert('連接失敗：' + response.error);
+                                    }
+                                    
+                                    this.driveStatusText.textContent = '連接雲端';
+                                    this.driveConnectBtn.disabled = false;
+                                    return;
+                                }
+                                
+                                // 获取访问令牌成功
+                                console.log('✅ 获取到访问令牌');
+                                this.accessToken = response.access_token;
+                                this.onDriveConnected();
+                            }
+                        });
+                        console.log('✅ Google Identity Services 已初始化');
+                        resolve();
+                    } else {
+                        console.log('等待 Google Identity Services 加载...');
+                        setTimeout(checkGIS, 500);
+                    }
+                };
+                checkGIS();
+            });
+        };
+        
+        // 并行等待两个库加载
+        Promise.all([waitForGapi(), waitForGIS()]).then(() => {
+            console.log('✅ Google Drive 功能已就绪');
+            // 启用连接按钮
+            if (this.driveConnectBtn) {
+                this.driveConnectBtn.disabled = false;
+                this.driveStatusText.textContent = '連接雲端';
+            }
+            
+            // 尝试自动连接（静默登录）
+            this.autoConnectDrive();
+        });
+    }
+    
+    async autoConnectDrive() {
+        if (!this.tokenClient) {
+            console.log('Token client 未初始化，跳过自动连接');
+            return;
+        }
+        
+        // 如果用户之前手动断开过，则不自动连接
+        if (this.userManuallyDisconnected) {
+            console.log('用户已手动断开，跳过自动连接');
+            return;
+        }
+        
+        try {
+            console.log('🔄 尝试静默自动登录...');
+            this.driveStatusText.textContent = '自動連接中...';
+            
+            // 使用静默模式请求 token
+            this.tokenClient.requestAccessToken({ prompt: '' });
+            
+        } catch (error) {
+            console.log('静默登录失败（正常情况）:', error);
+            this.driveStatusText.textContent = '連接雲端';
+        }
+    }
+    
+    async handleDriveConnect() {
+        if (this.isDriveConnected) {
+            // 已连接，点击断开
+            this.disconnectDrive();
+        } else {
+            // 未连接，开始认证
+            this.userManuallyDisconnected = false; // 重置断开标志
+            await this.connectToDrive();
+        }
+    }
+    
+    async connectToDrive() {
+        try {
+            if (!this.tokenClient) {
+                alert('Google Identity Services 未初始化，請重新加載頁面');
+                return;
+            }
+            
+            this.driveStatusText.textContent = '連接中...';
+            this.driveConnectBtn.disabled = true;
+            
+            // 用户主动点击，显示账号选择界面
+            this.tokenClient.requestAccessToken({ prompt: 'select_account' });
+            
+        } catch (error) {
+            console.error('Google Drive 连接失败:', error);
+            alert('連接 Google 雲端硬碟失敗，請稍後重試');
+            this.driveStatusText.textContent = '連接雲端';
+            this.driveConnectBtn.disabled = false;
+        }
+    }
+    
+    async onDriveConnected() {
+        try {
+            // 确保文件夹存在
+            await this.ensureDriveFolder();
+            
+            // 更新 UI
+            this.isDriveConnected = true;
+            this.driveConnectBtn.classList.add('connected');
+            this.driveStatusText.textContent = '已連接';
+            this.driveConnectBtn.disabled = false;
+            
+            // 显示上传按钮
+            this.uploadDriveBtn.style.display = 'inline-flex';
+            
+            console.log('✅ Google Drive 连接成功');
+        } catch (error) {
+            console.error('文件夹初始化失败:', error);
+            alert('雲端文件夾初始化失敗');
+            this.driveStatusText.textContent = '連接雲端';
+            this.driveConnectBtn.disabled = false;
+        }
+    }
+    
+    disconnectDrive() {
+        // 撤销访问令牌
+        if (this.accessToken && google.accounts.oauth2) {
+            google.accounts.oauth2.revoke(this.accessToken, () => {
+                console.log('✅ Access token 已撤销');
+            });
+        }
+        
+        this.isDriveConnected = false;
+        this.accessToken = null;
+        this.driveFolderId = null;
+        this.driveConnectBtn.classList.remove('connected');
+        this.driveStatusText.textContent = '連接雲端';
+        this.uploadDriveBtn.style.display = 'none';
+        this.userManuallyDisconnected = true; // 标记为手动断开
+        
+        console.log('✅ Google Drive 已断开');
+    }
+    
+    async ensureDriveFolder() {
+        try {
+            // 设置访问令牌
+            gapi.client.setToken({
+                access_token: this.accessToken
+            });
+            
+            // 搜索是否已存在该文件夹
+            const response = await gapi.client.drive.files.list({
+                q: `mimeType='application/vnd.google-apps.folder' and name='${this.DRIVE_FOLDER_NAME}' and trashed=false`,
+                fields: 'files(id, name)',
+                spaces: 'drive'
+            });
+            
+            if (response.result.files.length > 0) {
+                // 文件夹已存在
+                this.driveFolderId = response.result.files[0].id;
+                console.log('📁 找到现有文件夹:', this.driveFolderId);
+            } else {
+                // 创建新文件夹
+                const folderMetadata = {
+                    name: this.DRIVE_FOLDER_NAME,
+                    mimeType: 'application/vnd.google-apps.folder'
+                };
+                
+                const folder = await gapi.client.drive.files.create({
+                    resource: folderMetadata,
+                    fields: 'id'
+                });
+                
+                this.driveFolderId = folder.result.id;
+                console.log('📁 创建新文件夹:', this.driveFolderId);
+            }
+        } catch (error) {
+            console.error('文件夹检查/创建失败:', error);
+            throw error;
+        }
+    }
+    
+    async uploadToDrive() {
+        if (!this.isDriveConnected) {
+            alert('請先連接 Google 雲端硬碟');
+            return;
+        }
+        
+        if (!this.capturedImageData) {
+            alert('沒有可上傳的照片');
+            return;
+        }
+        
+        // 显示文件夹选择对话框
+        this.showFolderDialog();
+    }
+    
+    async performUpload(folderName) {
+        try {
+            // 更新按钮状态
+            this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg> 上傳中...';
+            this.uploadDriveBtn.disabled = true;
+            this.driveConnectBtn.classList.add('uploading');
+            
+            // 设置访问令牌
+            gapi.client.setToken({
+                access_token: this.accessToken
+            });
+            
+            // 确保目标文件夹存在
+            const targetFolderId = await this.ensureSpecificFolder(folderName);
+            
+            // 将 base64 转换为 Blob
+            const response = await fetch(this.capturedImageData);
+            const blob = await response.blob();
+            
+            // 生成文件名
+            const now = new Date();
+            const timestamp = now.getFullYear() + 
+                             String(now.getMonth() + 1).padStart(2, '0') + 
+                             String(now.getDate()).padStart(2, '0') + '_' +
+                             String(now.getHours()).padStart(2, '0') + 
+                             String(now.getMinutes()).padStart(2, '0') + 
+                             String(now.getSeconds()).padStart(2, '0');
+            const fileName = `watermark_${timestamp}.jpg`;
+            
+            // 准备元数据
+            const fileMetadata = {
+                name: fileName,
+                parents: [targetFolderId]
+            };
+            
+            // 使用 multipart 上传
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(fileMetadata)], { type: 'application/json' }));
+            form.append('file', blob);
+            
+            const uploadResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`
+                },
+                body: form
+            });
+            
+            if (!uploadResponse.ok) {
+                const errorData = await uploadResponse.json();
+                throw new Error('上传失败: ' + (errorData.error?.message || uploadResponse.statusText));
+            }
+            
+            const result = await uploadResponse.json();
+            console.log('✅ 文件上传成功:', result);
+            
+            // 更新按钮状态
+            this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg> 已上傳';
+            this.driveConnectBtn.classList.remove('uploading');
+            
+            // 2秒后恢复按钮
+            setTimeout(() => {
+                this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="17 13 12 8 7 13"/><line x1="12" y1="8" x2="12" y2="21"/></svg> 上傳至雲端';
+                this.uploadDriveBtn.disabled = false;
+            }, 2000);
+            
+        } catch (error) {
+            console.error('上传到 Google Drive 失败:', error);
+            alert('上傳失敗：' + error.message);
+            
+            // 恢复按钮
+            this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="17 13 12 8 7 13"/><line x1="12" y1="8" x2="12" y2="21"/></svg> 上傳至雲端';
+            this.uploadDriveBtn.disabled = false;
+            this.driveConnectBtn.classList.remove('uploading');
+        }
+    }
+    
+    // ===== 文件夹管理功能 =====
+    
+    loadCustomFolders() {
+        try {
+            const stored = localStorage.getItem('watermarkCamFolders');
+            this.customFolders = stored ? JSON.parse(stored) : ['WaterMarkCam Photos'];
+            this.renderFolderList();
+        } catch (error) {
+            console.error('加载文件夹列表失败:', error);
+            this.customFolders = ['WaterMarkCam Photos'];
+        }
+    }
+    
+    saveCustomFolders() {
+        try {
+            localStorage.setItem('watermarkCamFolders', JSON.stringify(this.customFolders));
+        } catch (error) {
+            console.error('保存文件夹列表失败:', error);
+        }
+    }
+    
+    addFolder() {
+        const folderName = this.folderNameInput.value.trim();
+        if (!folderName) {
+            alert('請輸入資料夾名稱');
+            return;
+        }
+        
+        if (this.customFolders.includes(folderName)) {
+            alert('此資料夾已存在');
+            return;
+        }
+        
+        this.customFolders.push(folderName);
+        this.saveCustomFolders();
+        this.renderFolderList();
+        this.folderNameInput.value = '';
+        
+        console.log('✅ 已添加文件夹:', folderName);
+    }
+    
+    deleteFolder(folderName) {
+        if (this.customFolders.length <= 1) {
+            alert('至少需要保留一個資料夾');
+            return;
+        }
+        
+        if (confirm(`確定要刪除資料夾 "${folderName}" 嗎？`)) {
+            this.customFolders = this.customFolders.filter(f => f !== folderName);
+            this.saveCustomFolders();
+            this.renderFolderList();
+            console.log('🗑️ 已删除文件夹:', folderName);
+        }
+    }
+    
+    renderFolderList() {
+        if (!this.folderList) return;
+        
+        if (this.customFolders.length === 0) {
+            this.folderList.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 10px;">尚未添加資料夾</p>';
+            return;
+        }
+        
+        this.folderList.innerHTML = this.customFolders.map(folder => `
+            <div class="folder-item">
+                <span class="folder-item-name">📁 ${folder}</span>
+                <button class="delete-folder-btn" data-folder="${folder}">刪除</button>
+            </div>
+        `).join('');
+        
+        // 使用事件委托添加删除按钮事件
+        this.folderList.querySelectorAll('.delete-folder-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.deleteFolder(btn.dataset.folder);
+            });
+        });
+    }
+    
+    showFolderDialog() {
+        if (this.customFolders.length === 0) {
+            alert('請先在設置中添加常用資料夾');
+            return;
+        }
+        
+        // 渲染文件夹选项
+        this.folderOptions.innerHTML = this.customFolders.map(folder => `
+            <div class="folder-option" data-folder="${folder}">
+                📁 ${folder}
+            </div>
+        `).join('');
+        
+        // 添加点击事件
+        this.folderOptions.querySelectorAll('.folder-option').forEach(option => {
+            option.addEventListener('click', () => {
+                // 移除其他选中状态
+                this.folderOptions.querySelectorAll('.folder-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                });
+                // 添加选中状态
+                option.classList.add('selected');
+                this.selectedFolder = option.dataset.folder;
+            });
+        });
+        
+        // 默认选中第一个
+        if (this.customFolders.length > 0) {
+            const firstOption = this.folderOptions.querySelector('.folder-option');
+            firstOption.classList.add('selected');
+            this.selectedFolder = firstOption.dataset.folder;
+        }
+        
+        // 显示对话框
+        this.folderDialog.style.display = 'flex';
+    }
+    
+    closeFolderDialog() {
+        this.folderDialog.style.display = 'none';
+        this.selectedFolder = null;
+    }
+    
+    async confirmFolderSelection() {
+        if (!this.selectedFolder) {
+            alert('請選擇一個資料夾');
+            return;
+        }
+        
+        // 关闭对话框
+        this.closeFolderDialog();
+        
+        // 执行上传
+        await this.performUpload(this.selectedFolder);
+    }
+    
+    async ensureSpecificFolder(folderName) {
+        try {
+            // 搜索是否已存在该文件夹
+            const response = await gapi.client.drive.files.list({
+                q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
+                fields: 'files(id, name)',
+                spaces: 'drive'
+            });
+            
+            if (response.result.files.length > 0) {
+                // 文件夹已存在
+                const folderId = response.result.files[0].id;
+                console.log('📁 找到现有文件夹:', folderName, folderId);
+                return folderId;
+            } else {
+                // 创建新文件夹
+                const folderMetadata = {
+                    name: folderName,
+                    mimeType: 'application/vnd.google-apps.folder'
+                };
+                
+                const folder = await gapi.client.drive.files.create({
+                    resource: folderMetadata,
+                    fields: 'id'
+                });
+                
+                const folderId = folder.result.id;
+                console.log('📁 创建新文件夹:', folderName, folderId);
+                return folderId;
+            }
+        } catch (error) {
+            console.error('文件夹检查/创建失败:', error);
+            throw error;
         }
     }
 }

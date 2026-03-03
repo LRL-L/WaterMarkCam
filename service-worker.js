@@ -1,6 +1,6 @@
 // Service Worker for WaterMarkCam PWA
 // 版本号 - 每次更新文件时修改此版本号即可触发缓存更新
-const CACHE_VERSION = 'v1.0.4';
+const CACHE_VERSION = 'v1.0.6';
 const CACHE_NAME = `watermark-cam-${CACHE_VERSION}`;
 
 // 需要缓存的文件列表
@@ -12,6 +12,12 @@ const ASSETS_TO_CACHE = [
   './manifest.json',
   './libs/qrcode.js',
   './libs/jsQR.min.js'
+];
+
+// 不缓存的外部 API（需要网络连接）
+const EXTERNAL_APIS = [
+  'googleapis.com',
+  'accounts.google.com'
 ];
 
 // 安装事件 - 缓存所有资源
@@ -68,6 +74,12 @@ self.addEventListener('fetch', (event) => {
 
   // 跳过 chrome-extension 和其他协议
   if (!event.request.url.startsWith('http')) {
+    return;
+  }
+  
+  // 跳过外部 API（Google APIs 等）- 必须使用网络
+  if (EXTERNAL_APIS.some(api => event.request.url.includes(api))) {
+    console.log('[SW] 跳过缓存，使用网络:', event.request.url);
     return;
   }
 

@@ -18,6 +18,12 @@
             <div class="header-content">
                 <h1>水印相機</h1>
                 <span class="step-indicator" id="stepIndicator">準備就緒</span>
+                <button id="driveConnectBtn" class="drive-connect-btn" title="連接Google雲端硬碟" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    <span id="driveStatusText">初始化中...</span>
+                </button>
             </div>
         </header>
 
@@ -101,12 +107,42 @@
                     <input type="text" id="qrText" placeholder="請先掃描二維碼⋯" value="" readonly>
                     <small>點擊掃描按鈕自動識別二維碼</small>
                 </div>
+                
+                <h3>雲端資料夾管理</h3>
+                <div class="form-group">
+                    <div class="folder-input-row">
+                        <input type="text" id="folderNameInput" placeholder="輸入資料夾名稱，如：設備A">
+                        <button id="addFolderBtn" class="add-folder-btn">+ 新增</button>
+                    </div>
+                    <small>預設常用資料夾，上傳時快速選擇</small>
+                    <div id="folderList" class="folder-list"></div>
+                </div>
+            </div>
+
+            <!-- 文件夹选择对话框 -->
+            <div class="folder-dialog" id="folderDialog" style="display: none;">
+                <div class="folder-dialog-content">
+                    <h3>選擇上傳資料夾</h3>
+                    <div id="folderOptions" class="folder-options"></div>
+                    <div class="folder-dialog-buttons">
+                        <button id="confirmFolderBtn" class="dialog-btn primary-btn">確定上傳</button>
+                        <button id="cancelFolderBtn" class="dialog-btn cancel-btn">取消</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 照片预览 -->
             <div class="photo-preview" id="photoPreview" style="display: none;">
                 <img id="photoPreviewImg" alt="照片預覽">
                 <div class="preview-controls">
+                    <button id="uploadDriveBtn" class="preview-btn drive-btn" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            <polyline points="17 13 12 8 7 13"/>
+                            <line x1="12" y1="8" x2="12" y2="21"/>
+                        </svg>
+                        上傳至雲端
+                    </button>
                     <button id="shareBtn" class="preview-btn share-btn" style="display: none;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
@@ -138,7 +174,7 @@
 
         <footer>
             <p>支援 iOS Safari 11.3+ / Android Chrome 53+</p>
-            <p class="version">版本 v1.0.4</p>
+            <p class="version">版本 v1.0.6</p>
         </footer>
     </div>
 
@@ -253,10 +289,15 @@
         })();
     </script>
     
+    <!-- Google Identity Services (新版 OAuth) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google API 客户端库 (用于 Drive API) -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    
     <!-- 使用纯Canvas实现的二维码库，兼容性更好 -->
     <script src="libs/qrcode.js"></script>
     <script src="libs/jsQR.min.js"></script>
-    <script src="app.js?v=1.0.4"></script>
+    <script src="app.js?v=1.0.6"></script>
     
     <!-- PWA Service Worker 注册 -->
     <script>
