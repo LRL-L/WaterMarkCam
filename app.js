@@ -948,11 +948,21 @@ class WaterMarkCam {
         try {
             console.log('🔄 开始初始化文件夹...');
             console.log('Access Token:', this.accessToken ? '已获取' : '未获取');
+            console.log('PWA 模式:', this.isPWA ? '是' : '否');
+            
+            // PWA 模式下需要更长的初始化时间
+            if (this.isPWA) {
+                console.log('⏳ PWA 模式，等待 API 完全加载...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
             
             // 确保 gapi.client 已初始化
             if (!window.gapi || !window.gapi.client || !window.gapi.client.drive) {
                 console.log('⚠️ gapi.client.drive 未就绪，重新初始化...');
                 await this.reinitializeGapi();
+                // 重新初始化后等待 API 完全就绪
+                console.log('⏳ 等待重新初始化完成...');
+                await new Promise(resolve => setTimeout(resolve, 1500));
             }
             
             // 确保文件夹存在
@@ -1012,7 +1022,7 @@ class WaterMarkCam {
         });
     }
     
-    async waitForDriveReady(maxAttempts = 5) {
+    async waitForDriveReady(maxAttempts = 10) {
         console.log('⏳ 等待 Drive API 就绪...');
         for (let i = 0; i < maxAttempts; i++) {
             if (window.gapi && 
@@ -1020,12 +1030,23 @@ class WaterMarkCam {
                 window.gapi.client.drive && 
                 window.gapi.client.drive.files) {
                 console.log('✅ Drive API 已就绪');
+                // 额外确认可以设置 token
+                try {
+                    if (this.accessToken) {
+                        gapi.client.setToken({ access_token: this.accessToken });
+                        console.log('✅ Access Token 设置成功');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Token 设置失败，继续等待...', e);
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    continue;
+                }
                 return true;
             }
             console.log(`⏳ 等待中... (${i + 1}/${maxAttempts})`);
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 800));
         }
-        console.warn('⚠️ Drive API 未就绪，尝试使用 REST API fallback');
+        console.warn('⚠️ Drive API 未就绪，使用 REST API fallback');
         return false;
     }
     
@@ -1123,22 +1144,45 @@ class WaterMarkCam {
         console.log('📂 使用 REST API 方式初始化文件夹...');
         
         try {
+            // 验证 Access Token
+            if (!this.accessToken) {
+                throw new Error('Access Token 不存在');
+            }
+            console.log('🔑 Access Token 长度:', this.accessToken.length);
+            
             // 搜索现有文件夹
             console.log('🔍 搜索现有文件夹:', this.DRIVE_FOLDER_NAME);
             const searchUrl = `https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.folder'+and+name='${encodeURIComponent(this.DRIVE_FOLDER_NAME)}'+and+trashed=false&fields=files(id,name)&spaces=drive`;
             
+            console.log('📡 发起搜索请求...');
             const searchResponse = await fetch(searchUrl, {
+                method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${this.accessToken}`
-                }
+                    'Authorization': `Bearer ${this.accessToken}`,
+                    'Accept': 'application/json'
+                },
+                mode: 'cors',
+                credentials: 'omit'
+            }).catch(netErr => {
+                console.error('❌ 网络请求失败:', netErr);
+                console.error('网络错误详情:', {
+                    name: netErr.name,
+                    message: netErr.message,
+                    stack: netErr.stack
+                });
+                throw new Error(`网络连接失败: ${netErr.message}`);
             });
             
+            console.log('📡 搜索响应状态:', searchResponse.status, searchResponse.statusText);
+            
             if (!searchResponse.ok) {
+                const errorText = await searchResponse.text();
+                console.error('❌ 搜索API错误响应:', errorText);
                 throw new Error(`搜索失败: ${searchResponse.status} ${searchResponse.statusText}`);
             }
             
             const searchData = await searchResponse.json();
-            console.log('搜索结果:', searchData);
+            console.log('✅ 搜索结果:', searchData);
             
             if (searchData.files && searchData.files.length > 0) {
                 this.driveFolderId = searchData.files[0].id;
@@ -1152,16 +1196,27 @@ class WaterMarkCam {
                     mimeType: 'application/vnd.google-apps.folder'
                 };
                 
+                console.log('📡 发起创建请求...');
                 const createResponse = await fetch(createUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${this.accessToken}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
+                    mode: 'cors',
+                    credentials: 'omit',
                     body: JSON.stringify(folderMetadata)
+                }).catch(netErr => {
+                    console.error('❌ 创建请求失败:', netErr);
+                    throw new Error(`创建请求失败: ${netErr.message}`);
                 });
                 
+                console.log('📡 创建响应状态:', createResponse.status, createResponse.statusText);
+                
                 if (!createResponse.ok) {
+                    const errorText = await createResponse.text();
+                    console.error('❌ 创建API错误响应:', errorText);
                     throw new Error(`创建文件夹失败: ${createResponse.status} ${createResponse.statusText}`);
                 }
                 
@@ -1171,6 +1226,13 @@ class WaterMarkCam {
             }
         } catch (error) {
             console.error('❌ REST API 方式失败:', error);
+            console.error('完整错误对象:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+                hasToken: !!this.accessToken,
+                tokenLength: this.accessToken ? this.accessToken.length : 0
+            });
             throw error;
         }
     }
