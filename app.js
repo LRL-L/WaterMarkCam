@@ -840,15 +840,28 @@ class WaterMarkCam {
                             client_id: this.GOOGLE_CLIENT_ID,
                             scope: this.DRIVE_SCOPE,
                             callback: (response) => {
+                                console.log('🎯 OAuth 回调被触发');
+                                console.log('回调响应:', response);
+                                
+                                // 清除超时检测
+                                if (this.oauthTimeoutId) {
+                                    clearTimeout(this.oauthTimeoutId);
+                                    this.oauthTimeoutId = null;
+                                    console.log('✅ 已清除 OAuth 超时检测');
+                                }
+                                
                                 if (response.error) {
-                                    console.log('OAuth 响应错误:', response.error);
+                                    console.log('⚠️ OAuth 响应错误:', response.error);
+                                    console.log('错误类型:', response.error_description || '无详细描述');
                                     
                                     // 静默登录失败是正常情况，不需要弹窗
                                     if (response.error !== 'popup_closed' && 
                                         response.error !== 'access_denied' &&
                                         response.error !== 'user_logged_out') {
-                                        console.error('OAuth 错误:', response);
+                                        console.error('❌ OAuth 严重错误:', response);
                                         alert('連接失敗：' + response.error);
+                                    } else {
+                                        console.log('ℹ️ 用户取消授权或静默登录失败（正常情况）');
                                     }
                                     
                                     this.driveStatusText.textContent = '連接雲端';
@@ -857,8 +870,27 @@ class WaterMarkCam {
                                 }
                                 
                                 // 获取访问令牌成功
-                                console.log('✅ 获取到访问令牌');
+                                console.log('✅ 成功获取访问令牌！');
+                                console.log('Token 长度:', response.access_token ? response.access_token.length : 0);
+                                console.log('Token 过期时间:', response.expires_in, '秒');
+                                console.log('Token 类型:', response.token_type);
+                                console.log('授权范围:', response.scope);
+                                
                                 this.accessToken = response.access_token;
+                                
+                                // 持久化存储 token 和过期时间
+                                const tokenData = {
+                                    token: response.access_token,
+                                    expiresAt: Date.now() + (response.expires_in * 1000),
+                                    isPWA: this.isPWA
+                                };
+                                try {
+                                    localStorage.setItem('drive_token', JSON.stringify(tokenData));
+                                    console.log('✅ Token 已保存到 localStorage');
+                                } catch (e) {
+                                    console.warn('⚠️ localStorage 保存失败:', e);
+                                }
+                                
                                 this.onDriveConnected();
                             }
                         });
@@ -888,6 +920,45 @@ class WaterMarkCam {
     }
     
     async autoConnectDrive() {
+        // 先尝试从 localStorage 恢复 token
+        try {
+            const tokenDataStr = localStorage.getItem('drive_token');
+            if (tokenDataStr) {
+                const tokenData = JSON.parse(tokenDataStr);
+                console.log('💾 从 localStorage 找到 token');
+                console.log('Token 过期时间:', new Date(tokenData.expiresAt).toLocaleString());
+                console.log('当前时间:', new Date().toLocaleString());
+                
+                // 检查 token 是否过期（提前5分钟视为过期）
+                if (tokenData.expiresAt > Date.now() + 5 * 60 * 1000) {
+                    console.log('✅ Token 仍然有效，使用缓存的 token');
+                    this.accessToken = tokenData.token;
+                    
+                    // 尝试恢复 folder ID
+                    try {
+                        const folderId = localStorage.getItem('drive_folder_id');
+                        if (folderId) {
+                            this.driveFolderId = folderId;
+                            console.log('✅ 已恢复 folder ID:', folderId);
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ 恢复 folder ID 失败:', e);
+                    }
+                    
+                    // 直接连接
+                    this.driveStatusText.textContent = '恢復連接中...';
+                    await this.onDriveConnected();
+                    return;
+                } else {
+                    console.log('⚠️ Token 已过期，清除缓存');
+                    localStorage.removeItem('drive_token');
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ 恢复 token 失败:', e);
+        }
+        
+        // 如果没有缓存的 token，尝试静默登录
         if (!this.tokenClient) {
             console.log('Token client 未初始化，跳过自动连接');
             return;
@@ -930,14 +1001,34 @@ class WaterMarkCam {
                 return;
             }
             
+            console.log('🔐 开始 OAuth 授权流程...');
+            console.log('PWA 模式:', this.isPWA ? '是' : '否');
+            console.log('当前 URL:', window.location.href);
+            
             this.driveStatusText.textContent = '連接中...';
             this.driveConnectBtn.disabled = true;
             
+            // 设置超时检测（30秒后如果还没有响应，重置UI）
+            const timeoutId = setTimeout(() => {
+                console.warn('⚠️ OAuth 授权超时（30秒无响应）');
+                if (!this.isDriveConnected) {
+                    console.log('重置 UI 状态');
+                    this.driveStatusText.textContent = '連接雲端';
+                    this.driveConnectBtn.disabled = false;
+                }
+            }, 30000);
+            
+            // 存储timeout ID以便在成功时清除
+            this.oauthTimeoutId = timeoutId;
+            
             // 用户主动点击，显示账号选择界面
+            console.log('📱 调用 requestAccessToken...');
             this.tokenClient.requestAccessToken({ prompt: 'select_account' });
+            console.log('✅ requestAccessToken 已调用，等待用户授权...');
             
         } catch (error) {
-            console.error('Google Drive 连接失败:', error);
+            console.error('❌ Google Drive 连接失败:', error);
+            console.error('错误详情:', error.message, error.stack);
             alert('連接 Google 雲端硬碟失敗，請稍後重試');
             this.driveStatusText.textContent = '連接雲端';
             this.driveConnectBtn.disabled = false;
@@ -1058,6 +1149,15 @@ class WaterMarkCam {
             });
         }
         
+        // 清除 localStorage 中的 token
+        try {
+            localStorage.removeItem('drive_token');
+            localStorage.removeItem('drive_folder_id');
+            console.log('✅ 已清除 localStorage 中的数据');
+        } catch (e) {
+            console.warn('⚠️ 清除 localStorage 失败:', e);
+        }
+        
         this.isDriveConnected = false;
         this.accessToken = null;
         this.driveFolderId = null;
@@ -1122,6 +1222,13 @@ class WaterMarkCam {
         if (response.result.files && response.result.files.length > 0) {
             this.driveFolderId = response.result.files[0].id;
             console.log('✅ 找到现有文件夹:', this.driveFolderId);
+            
+            // 保存到 localStorage
+            try {
+                localStorage.setItem('drive_folder_id', this.driveFolderId);
+            } catch (e) {
+                console.warn('⚠️ 无法保存 folder ID:', e);
+            }
         } else {
             // 创建新文件夹
             console.log('📁 创建新文件夹...');
@@ -1137,6 +1244,13 @@ class WaterMarkCam {
             
             this.driveFolderId = folder.result.id;
             console.log('✅ 创建新文件夹成功:', this.driveFolderId);
+            
+            // 保存到 localStorage
+            try {
+                localStorage.setItem('drive_folder_id', this.driveFolderId);
+            } catch (e) {
+                console.warn('⚠️ 无法保存 folder ID:', e);
+            }
         }
     }
     
@@ -1187,6 +1301,13 @@ class WaterMarkCam {
             if (searchData.files && searchData.files.length > 0) {
                 this.driveFolderId = searchData.files[0].id;
                 console.log('✅ 找到现有文件夹:', this.driveFolderId);
+                
+                // 保存到 localStorage
+                try {
+                    localStorage.setItem('drive_folder_id', this.driveFolderId);
+                } catch (e) {
+                    console.warn('⚠️ 无法保存 folder ID:', e);
+                }
             } else {
                 // 创建新文件夹
                 console.log('📁 创建新文件夹...');
@@ -1223,6 +1344,13 @@ class WaterMarkCam {
                 const createData = await createResponse.json();
                 this.driveFolderId = createData.id;
                 console.log('✅ 创建新文件夹成功:', this.driveFolderId);
+                
+                // 保存到 localStorage
+                try {
+                    localStorage.setItem('drive_folder_id', this.driveFolderId);
+                } catch (e) {
+                    console.warn('⚠️ 无法保存 folder ID:', e);
+                }
             }
         } catch (error) {
             console.error('❌ REST API 方式失败:', error);
