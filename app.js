@@ -25,15 +25,6 @@ class WaterMarkCam {
         this.driveStatusText = document.getElementById('driveStatusText');
         this.uploadDriveBtn = document.getElementById('uploadDriveBtn');
         
-        // 文件夹管理元素
-        this.folderNameInput = document.getElementById('folderNameInput');
-        this.addFolderBtn = document.getElementById('addFolderBtn');
-        this.folderList = document.getElementById('folderList');
-        this.folderDialog = document.getElementById('folderDialog');
-        this.folderOptions = document.getElementById('folderOptions');
-        this.confirmFolderBtn = document.getElementById('confirmFolderBtn');
-        this.cancelFolderBtn = document.getElementById('cancelFolderBtn');
-        
         // 步驟指示器
         this.stepIndicator = document.getElementById('stepIndicator');
         
@@ -75,11 +66,6 @@ class WaterMarkCam {
         this.driveFolderId = null;
         this.tokenClient = null; // Google Identity Services Token Client
         
-        // 文件夹管理
-        this.customFolders = [];
-        this.selectedFolder = null;
-        this.loadCustomFolders();
-        
         // 自动连接控制
         this.userManuallyDisconnected = false; // 用户是否手动断开连接
         
@@ -100,14 +86,6 @@ class WaterMarkCam {
         this.retakeBtn.addEventListener('click', () => this.retake());
         this.driveConnectBtn.addEventListener('click', () => this.handleDriveConnect());
         this.uploadDriveBtn.addEventListener('click', () => this.uploadToDrive());
-        
-        // 文件夹管理事件
-        this.addFolderBtn.addEventListener('click', () => this.addFolder());
-        this.folderNameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.addFolder();
-        });
-        this.confirmFolderBtn.addEventListener('click', () => this.confirmFolderSelection());
-        this.cancelFolderBtn.addEventListener('click', () => this.closeFolderDialog());
         
         // 时间固定显示，移除相关事件监听
         
@@ -1051,14 +1029,9 @@ class WaterMarkCam {
             return;
         }
         
-        // 显示文件夹选择对话框
-        this.showFolderDialog();
-    }
-    
-    async performUpload(folderName) {
         try {
             // 更新按钮状态
-            this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg> 上傳中...';
+            this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 上傳中...';
             this.uploadDriveBtn.disabled = true;
             this.driveConnectBtn.classList.add('uploading');
             
@@ -1066,9 +1039,6 @@ class WaterMarkCam {
             gapi.client.setToken({
                 access_token: this.accessToken
             });
-            
-            // 确保目标文件夹存在
-            const targetFolderId = await this.ensureSpecificFolder(folderName);
             
             // 将 base64 转换为 Blob
             const response = await fetch(this.capturedImageData);
@@ -1087,7 +1057,7 @@ class WaterMarkCam {
             // 准备元数据
             const fileMetadata = {
                 name: fileName,
-                parents: [targetFolderId]
+                parents: [this.driveFolderId]
             };
             
             // 使用 multipart 上传
@@ -1129,175 +1099,6 @@ class WaterMarkCam {
             this.uploadDriveBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="17 13 12 8 7 13"/><line x1="12" y1="8" x2="12" y2="21"/></svg> 上傳至雲端';
             this.uploadDriveBtn.disabled = false;
             this.driveConnectBtn.classList.remove('uploading');
-        }
-    }
-    
-    // ===== 文件夹管理功能 =====
-    
-    loadCustomFolders() {
-        try {
-            const stored = localStorage.getItem('watermarkCamFolders');
-            this.customFolders = stored ? JSON.parse(stored) : ['WaterMarkCam Photos'];
-            this.renderFolderList();
-        } catch (error) {
-            console.error('加载文件夹列表失败:', error);
-            this.customFolders = ['WaterMarkCam Photos'];
-        }
-    }
-    
-    saveCustomFolders() {
-        try {
-            localStorage.setItem('watermarkCamFolders', JSON.stringify(this.customFolders));
-        } catch (error) {
-            console.error('保存文件夹列表失败:', error);
-        }
-    }
-    
-    addFolder() {
-        const folderName = this.folderNameInput.value.trim();
-        if (!folderName) {
-            alert('請輸入資料夾名稱');
-            return;
-        }
-        
-        if (this.customFolders.includes(folderName)) {
-            alert('此資料夾已存在');
-            return;
-        }
-        
-        this.customFolders.push(folderName);
-        this.saveCustomFolders();
-        this.renderFolderList();
-        this.folderNameInput.value = '';
-        
-        console.log('✅ 已添加文件夹:', folderName);
-    }
-    
-    deleteFolder(folderName) {
-        if (this.customFolders.length <= 1) {
-            alert('至少需要保留一個資料夾');
-            return;
-        }
-        
-        if (confirm(`確定要刪除資料夾 "${folderName}" 嗎？`)) {
-            this.customFolders = this.customFolders.filter(f => f !== folderName);
-            this.saveCustomFolders();
-            this.renderFolderList();
-            console.log('🗑️ 已删除文件夹:', folderName);
-        }
-    }
-    
-    renderFolderList() {
-        if (!this.folderList) return;
-        
-        if (this.customFolders.length === 0) {
-            this.folderList.innerHTML = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 10px;">尚未添加資料夾</p>';
-            return;
-        }
-        
-        this.folderList.innerHTML = this.customFolders.map(folder => `
-            <div class="folder-item">
-                <span class="folder-item-name">📁 ${folder}</span>
-                <button class="delete-folder-btn" data-folder="${folder}">刪除</button>
-            </div>
-        `).join('');
-        
-        // 使用事件委托添加删除按钮事件
-        this.folderList.querySelectorAll('.delete-folder-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this.deleteFolder(btn.dataset.folder);
-            });
-        });
-    }
-    
-    showFolderDialog() {
-        if (this.customFolders.length === 0) {
-            alert('請先在設置中添加常用資料夾');
-            return;
-        }
-        
-        // 渲染文件夹选项
-        this.folderOptions.innerHTML = this.customFolders.map(folder => `
-            <div class="folder-option" data-folder="${folder}">
-                📁 ${folder}
-            </div>
-        `).join('');
-        
-        // 添加点击事件
-        this.folderOptions.querySelectorAll('.folder-option').forEach(option => {
-            option.addEventListener('click', () => {
-                // 移除其他选中状态
-                this.folderOptions.querySelectorAll('.folder-option').forEach(opt => {
-                    opt.classList.remove('selected');
-                });
-                // 添加选中状态
-                option.classList.add('selected');
-                this.selectedFolder = option.dataset.folder;
-            });
-        });
-        
-        // 默认选中第一个
-        if (this.customFolders.length > 0) {
-            const firstOption = this.folderOptions.querySelector('.folder-option');
-            firstOption.classList.add('selected');
-            this.selectedFolder = firstOption.dataset.folder;
-        }
-        
-        // 显示对话框
-        this.folderDialog.style.display = 'flex';
-    }
-    
-    closeFolderDialog() {
-        this.folderDialog.style.display = 'none';
-        this.selectedFolder = null;
-    }
-    
-    async confirmFolderSelection() {
-        if (!this.selectedFolder) {
-            alert('請選擇一個資料夾');
-            return;
-        }
-        
-        // 关闭对话框
-        this.closeFolderDialog();
-        
-        // 执行上传
-        await this.performUpload(this.selectedFolder);
-    }
-    
-    async ensureSpecificFolder(folderName) {
-        try {
-            // 搜索是否已存在该文件夹
-            const response = await gapi.client.drive.files.list({
-                q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            
-            if (response.result.files.length > 0) {
-                // 文件夹已存在
-                const folderId = response.result.files[0].id;
-                console.log('📁 找到现有文件夹:', folderName, folderId);
-                return folderId;
-            } else {
-                // 创建新文件夹
-                const folderMetadata = {
-                    name: folderName,
-                    mimeType: 'application/vnd.google-apps.folder'
-                };
-                
-                const folder = await gapi.client.drive.files.create({
-                    resource: folderMetadata,
-                    fields: 'id'
-                });
-                
-                const folderId = folder.result.id;
-                console.log('📁 创建新文件夹:', folderName, folderId);
-                return folderId;
-            }
-        } catch (error) {
-            console.error('文件夹检查/创建失败:', error);
-            throw error;
         }
     }
 }

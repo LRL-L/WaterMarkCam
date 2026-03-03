@@ -107,28 +107,6 @@
                     <input type="text" id="qrText" placeholder="請先掃描二維碼⋯" value="" readonly>
                     <small>點擊掃描按鈕自動識別二維碼</small>
                 </div>
-                
-                <h3>雲端資料夾管理</h3>
-                <div class="form-group">
-                    <div class="folder-input-row">
-                        <input type="text" id="folderNameInput" placeholder="輸入資料夾名稱，如：設備A">
-                        <button id="addFolderBtn" class="add-folder-btn">+ 新增</button>
-                    </div>
-                    <small>預設常用資料夾，上傳時快速選擇</small>
-                    <div id="folderList" class="folder-list"></div>
-                </div>
-            </div>
-
-            <!-- 文件夹选择对话框 -->
-            <div class="folder-dialog" id="folderDialog" style="display: none;">
-                <div class="folder-dialog-content">
-                    <h3>選擇上傳資料夾</h3>
-                    <div id="folderOptions" class="folder-options"></div>
-                    <div class="folder-dialog-buttons">
-                        <button id="confirmFolderBtn" class="dialog-btn primary-btn">確定上傳</button>
-                        <button id="cancelFolderBtn" class="dialog-btn cancel-btn">取消</button>
-                    </div>
-                </div>
             </div>
 
             <!-- 照片预览 -->
@@ -174,7 +152,7 @@
 
         <footer>
             <p>支援 iOS Safari 11.3+ / Android Chrome 53+</p>
-            <p class="version">版本 v1.0.6</p>
+            <p class="version">版本 v1.0.7</p>
         </footer>
     </div>
 
@@ -297,7 +275,7 @@
     <!-- 使用纯Canvas实现的二维码库，兼容性更好 -->
     <script src="libs/qrcode.js"></script>
     <script src="libs/jsQR.min.js"></script>
-    <script src="app.js?v=1.0.6"></script>
+    <script src="app.js?v=1.0.7"></script>
     
     <!-- PWA Service Worker 注册 -->
     <script>
