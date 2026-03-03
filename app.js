@@ -985,7 +985,7 @@ class WaterMarkCam {
     }
     
     async reinitializeGapi() {
-        console.log('重新初始化 gapi.client...');
+        console.log('🔄 重新初始化 gapi.client...');
         return new Promise((resolve, reject) => {
             if (!window.gapi) {
                 reject(new Error('gapi 库未加载'));
@@ -998,13 +998,35 @@ class WaterMarkCam {
                     discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
                 }).then(() => {
                     console.log('✅ gapi.client 重新初始化完成');
+                    // 重新设置 Access Token
+                    if (this.accessToken) {
+                        gapi.client.setToken({ access_token: this.accessToken });
+                        console.log('✅ Access Token 已重新设置');
+                    }
                     resolve();
                 }).catch(err => {
-                    console.error('gapi.client 初始化失败:', err);
+                    console.error('❌ gapi.client 初始化失败:', err);
                     reject(err);
                 });
             });
         });
+    }
+    
+    async waitForDriveReady(maxAttempts = 5) {
+        console.log('⏳ 等待 Drive API 就绪...');
+        for (let i = 0; i < maxAttempts; i++) {
+            if (window.gapi && 
+                window.gapi.client && 
+                window.gapi.client.drive && 
+                window.gapi.client.drive.files) {
+                console.log('✅ Drive API 已就绪');
+                return true;
+            }
+            console.log(`⏳ 等待中... (${i + 1}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        console.warn('⚠️ Drive API 未就绪，尝试使用 REST API fallback');
+        return false;
     }
     
     disconnectDrive() {
@@ -1033,41 +1055,18 @@ class WaterMarkCam {
                 throw new Error('Access Token 未获取');
             }
             
+            console.log('🔄 开始初始化文件夹...');
             console.log('⚙️ 设置 Access Token...');
-            gapi.client.setToken({
-                access_token: this.accessToken
-            });
             
-            console.log('🔍 搜索现有文件夹:', this.DRIVE_FOLDER_NAME);
+            // 等待 Drive API 就绪
+            const isDriveReady = await this.waitForDriveReady();
             
-            // 搜索是否已存在该文件夹
-            const response = await gapi.client.drive.files.list({
-                q: `mimeType='application/vnd.google-apps.folder' and name='${this.DRIVE_FOLDER_NAME}' and trashed=false`,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            
-            console.log('搜索结果:', response);
-            
-            if (response.result.files && response.result.files.length > 0) {
-                // 文件夹已存在
-                this.driveFolderId = response.result.files[0].id;
-                console.log('📁 找到现有文件夹:', this.driveFolderId);
+            if (isDriveReady) {
+                // 使用 gapi.client 方式
+                return await this.ensureDriveFolderWithGapi();
             } else {
-                // 创建新文件夹
-                console.log('📁 创建新文件夹...');
-                const folderMetadata = {
-                    name: this.DRIVE_FOLDER_NAME,
-                    mimeType: 'application/vnd.google-apps.folder'
-                };
-                
-                const folder = await gapi.client.drive.files.create({
-                    resource: folderMetadata,
-                    fields: 'id'
-                });
-                
-                this.driveFolderId = folder.result.id;
-                console.log('📁 创建新文件夹成功:', this.driveFolderId);
+                // 使用 REST API fallback
+                return await this.ensureDriveFolderWithFetch();
             }
         } catch (error) {
             console.error('❌ ensureDriveFolder 失败:', error);
@@ -1078,6 +1077,101 @@ class WaterMarkCam {
                 statusText: error.statusText
             });
             throw new Error('文件夹操作失败: ' + (error.result?.error?.message || error.message));
+        }
+    }
+    
+    async ensureDriveFolderWithGapi() {
+        console.log('📂 使用 GAPI 方式初始化文件夹...');
+        
+        gapi.client.setToken({
+            access_token: this.accessToken
+        });
+        
+        console.log('🔍 搜索现有文件夹:', this.DRIVE_FOLDER_NAME);
+        
+        // 搜索是否已存在该文件夹
+        const response = await gapi.client.drive.files.list({
+            q: `mimeType='application/vnd.google-apps.folder' and name='${this.DRIVE_FOLDER_NAME}' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive'
+        });
+        
+        console.log('搜索结果:', response);
+        
+        if (response.result.files && response.result.files.length > 0) {
+            this.driveFolderId = response.result.files[0].id;
+            console.log('✅ 找到现有文件夹:', this.driveFolderId);
+        } else {
+            // 创建新文件夹
+            console.log('📁 创建新文件夹...');
+            const folderMetadata = {
+                name: this.DRIVE_FOLDER_NAME,
+                mimeType: 'application/vnd.google-apps.folder'
+            };
+            
+            const folder = await gapi.client.drive.files.create({
+                resource: folderMetadata,
+                fields: 'id'
+            });
+            
+            this.driveFolderId = folder.result.id;
+            console.log('✅ 创建新文件夹成功:', this.driveFolderId);
+        }
+    }
+    
+    async ensureDriveFolderWithFetch() {
+        console.log('📂 使用 REST API 方式初始化文件夹...');
+        
+        try {
+            // 搜索现有文件夹
+            console.log('🔍 搜索现有文件夹:', this.DRIVE_FOLDER_NAME);
+            const searchUrl = `https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.folder'+and+name='${encodeURIComponent(this.DRIVE_FOLDER_NAME)}'+and+trashed=false&fields=files(id,name)&spaces=drive`;
+            
+            const searchResponse = await fetch(searchUrl, {
+                headers: {
+                    'Authorization': `Bearer ${this.accessToken}`
+                }
+            });
+            
+            if (!searchResponse.ok) {
+                throw new Error(`搜索失败: ${searchResponse.status} ${searchResponse.statusText}`);
+            }
+            
+            const searchData = await searchResponse.json();
+            console.log('搜索结果:', searchData);
+            
+            if (searchData.files && searchData.files.length > 0) {
+                this.driveFolderId = searchData.files[0].id;
+                console.log('✅ 找到现有文件夹:', this.driveFolderId);
+            } else {
+                // 创建新文件夹
+                console.log('📁 创建新文件夹...');
+                const createUrl = 'https://www.googleapis.com/drive/v3/files?fields=id';
+                const folderMetadata = {
+                    name: this.DRIVE_FOLDER_NAME,
+                    mimeType: 'application/vnd.google-apps.folder'
+                };
+                
+                const createResponse = await fetch(createUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(folderMetadata)
+                });
+                
+                if (!createResponse.ok) {
+                    throw new Error(`创建文件夹失败: ${createResponse.status} ${createResponse.statusText}`);
+                }
+                
+                const createData = await createResponse.json();
+                this.driveFolderId = createData.id;
+                console.log('✅ 创建新文件夹成功:', this.driveFolderId);
+            }
+        } catch (error) {
+            console.error('❌ REST API 方式失败:', error);
+            throw error;
         }
     }
     
@@ -1101,17 +1195,6 @@ class WaterMarkCam {
             console.log('📤 开始上传照片...');
             console.log('Folder ID:', this.driveFolderId);
             console.log('Access Token:', this.accessToken ? '存在' : '不存在');
-            
-            // 确保 gapi.client 已初始化（PWA 模式可能需要）
-            if (!window.gapi || !window.gapi.client || !window.gapi.client.drive) {
-                console.log('⚠️ 上传前检测到 gapi 未就绪，重新初始化...');
-                await this.reinitializeGapi();
-            }
-            
-            // 设置访问令牌
-            gapi.client.setToken({
-                access_token: this.accessToken
-            });
             
             // 将 base64 转换为 Blob
             const response = await fetch(this.capturedImageData);
