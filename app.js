@@ -315,12 +315,52 @@ class WaterMarkCam {
         
         if (videoWidth > 0 && videoHeight > 0) {
             try {
-                // 優化1: 只掃描中心區域（70%），提高識別速度和準確率
-                const scanRegion = 0.7;
-                const scanWidth = Math.floor(videoWidth * scanRegion);
-                const scanHeight = Math.floor(videoHeight * scanRegion);
-                const offsetX = Math.floor((videoWidth - scanWidth) / 2);
-                const offsetY = Math.floor((videoHeight - scanHeight) / 2);
+                // 優化1: 只掃描中心區域（完全對齊視覺 UI 掃描框）
+                const scanBox = document.querySelector('.scan-box');
+                const videoElement = this.video;
+                let scanWidth, scanHeight, offsetX, offsetY;
+
+                if (scanBox && videoElement) {
+                    const videoRect = videoElement.getBoundingClientRect();
+                    const scanRect = scanBox.getBoundingClientRect();
+
+                    // 計算 object-fit: cover 時的縮放比例（取最大值）
+                    const scaleX = videoRect.width / videoWidth;
+                    const scaleY = videoRect.height / videoHeight;
+                    const scale = Math.max(scaleX, scaleY);
+
+                    // 影片實際在畫面中呈現的尺寸（超出被裁切）
+                    const drawWidth = videoWidth * scale;
+                    const drawHeight = videoHeight * scale;
+
+                    // 影片在容器內的位移量（置中對齊）
+                    const videoOffsetX = (drawWidth - videoRect.width) / 2;
+                    const videoOffsetY = (drawHeight - videoRect.height) / 2;
+
+                    // 掃描框相對於影片顯示起點的座標
+                    const scanLeftOnVideo = (scanRect.left - videoRect.left) + videoOffsetX;
+                    const scanTopOnVideo = (scanRect.top - videoRect.top) + videoOffsetY;
+
+                    // 加一點外擴（增加掃碼寬容度），轉換回原解析度
+                    const padding = 20; // 邊緣擴展20px
+                    offsetX = Math.floor((scanLeftOnVideo - padding) / scale);
+                    offsetY = Math.floor((scanTopOnVideo - padding) / scale);
+                    scanWidth = Math.floor((scanRect.width + padding * 2) / scale);
+                    scanHeight = Math.floor((scanRect.height + padding * 2) / scale);
+
+                    // 邊界保護，確保不超出畫面
+                    offsetX = Math.max(0, offsetX);
+                    offsetY = Math.max(0, offsetY);
+                    scanWidth = Math.min(videoWidth - offsetX, scanWidth);
+                    scanHeight = Math.min(videoHeight - offsetY, scanHeight);
+                } else {
+                    // 若無 scanBox，退回舊的 70% 置中策略
+                    const scanRegion = 0.7;
+                    scanWidth = Math.floor(videoWidth * scanRegion);
+                    scanHeight = Math.floor(videoHeight * scanRegion);
+                    offsetX = Math.floor((videoWidth - scanWidth) / 2);
+                    offsetY = Math.floor((videoHeight - scanHeight) / 2);
+                }
                 
                 // 優化2: 降低分辨率以提高性能（保持最大800px）
                 const maxDimension = 800;
